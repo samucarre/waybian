@@ -1,0 +1,97 @@
+From 77af0e591ad48efd74d606d97b1257aa86adb45b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 12:06:22 +0100
+Subject: [PATCH] imap: IDLE on Python < 3.14, and prune with UID 1:* instead
+ of SEARCH ALL (iCloud)
+
+Debian 13 ships Python 3.13, which has no IMAP4.idle(): the inbox watcher
+died on AttributeError every time it started, so the inbox only refreshed
+on the 15-minute poll. _idle_by_hand speaks RFC 2177 on the wire when the
+method is missing.
+
+iCloud answers UID SEARCH ALL from a stale index that still lists messages
+moved or deleted long ago (129k UIDs for a mailbox of 119k), so rows that
+had left the folder were never pruned and opened as "no message body".
+UID SEARCH UID 1:* is exact there, and quicker.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/postcard/core/net/imap_session.py | 52 +++++++++++++++++++++++++--
+ 1 file changed, 50 insertions(+), 2 deletions(-)
+
+diff --git a/src/postcard/core/net/imap_session.py b/src/postcard/core/net/imap_session.py
+index 61a7b49..86dd853 100644
+--- a/src/postcard/core/net/imap_session.py
++++ b/src/postcard/core/net/imap_session.py
+@@ -305,11 +305,53 @@ def idle(self, seconds: float) -> bool:
+         try:
+             # New in Python 3.14, which the Flatpak runtime ships; pyright
+             # checks against 3.12. It sends DONE on the way out of the block.
++            if not hasattr(imap, "idle"):
++                # Debian 13 runs Python 3.13: without this the watcher died on
++                # AttributeError every time and the inbox only refreshed on
++                # the 15-minute poll.
++                return self._idle_by_hand(imap, seconds)
+             with imap.idle(duration=seconds) as idler:  # pyright: ignore[reportAttributeAccessIssue]
+                 return any(kind in IDLE_CHANGES for kind, _data in idler)
+         except imaplib.IMAP4.error as error:
+             raise ImapError(f"IDLE failed: {error}") from error
+ 
++    def _idle_by_hand(self, imap: imaplib.IMAP4, seconds: float) -> bool:
++        """IDLE (RFC 2177) on the wire for a Python older than 3.14.
++
++        Reads the untagged lines itself instead of through imaplib's parser,
++        so nothing is left behind in its untagged-response bookkeeping.
++        """
++        tag = imap._new_tag()  # pyright: ignore[reportAttributeAccessIssue]
++        imap.send(tag + b" IDLE\r\n")
++        line = imap.readline()
++        if not line.startswith(b"+"):
++            raise ImapError(f"IDLE refused: {line!r}")
++        sock = imap.socket()
++        previous = sock.gettimeout()
++        sock.settimeout(seconds)
++        changed = False
++        try:
++            while True:
++                line = imap.readline()
++                if not line:
++                    raise ImapError("connection closed during IDLE")
++                # "* 12 EXISTS", "* 3 EXPUNGE"; a FETCH or "* OK Still here" is noise.
++                if line.startswith(b"*"):
++                    kind = line.split()[-1].decode("ascii", "replace").upper()
++                    if kind in IDLE_CHANGES:
++                        changed = True
++                        break
++        except TimeoutError:
++            pass
++        finally:
++            sock.settimeout(previous)
++        imap.send(b"DONE\r\n")
++        while True:
++            line = imap.readline()
++            if not line or line.startswith(tag):
++                break
++        return changed
++
+     def append(self, mailbox: str, raw: bytes) -> None:
+         """Upload a message into a mailbox, without selecting it first.
+ 
+@@ -330,9 +372,15 @@ def store_flags(self, uids: str, flags: str, should_add: bool) -> None:
+             raise ImapError(f"could not update flags on {uids}: {payload}")
+ 
+     def search_all_uids(self) -> set[str]:
+-        """Return every UID in the currently selected mailbox."""
++        """Return every UID in the currently selected mailbox.
++
++        Asked as a UID range rather than ALL: iCloud answers ALL from a stale
++        index that still lists messages moved or deleted long ago (129k UIDs
++        for a mailbox of 119k), so rows that left the folder were never pruned
++        and opened as "no message body". UID 1:* is exact there, and quicker.
++        """
+         try:
+-            status, payload = self._require_imap().uid("SEARCH", "ALL")
++            status, payload = self._require_imap().uid("SEARCH", "UID", "1:*")
+         except imaplib.IMAP4.error as error:
+             raise ImapError(f"search failed: {error}") from error
+ 

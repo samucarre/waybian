@@ -1,0 +1,103 @@
+From ba0809ea179ce560127f46cc23788518d85782f3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Mon, 26 Oct 2026 18:47:49 +0100
+Subject: [PATCH] glibmm-2.68: catch Glib::Error instead of the removed
+ Glib::Exception
+
+glibmm/exception.h does not exist in glibmm-2.68 (it only exists in the
+glibmm-2.4 ABI), so the build fails on systems without the old ABI headers.
+Glib::Error derives from std::exception and what() still works.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/AAppIconLabel.cpp | 4 ++--
+ src/AIconLabel.cpp    | 4 ++--
+ src/main.cpp          | 4 ++--
+ src/modules/image.cpp | 4 ++--
+ 4 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/src/AAppIconLabel.cpp b/src/AAppIconLabel.cpp
+index b21f516336..dc8e382f2f 100644
+--- a/src/AAppIconLabel.cpp
++++ b/src/AAppIconLabel.cpp
+@@ -1,7 +1,7 @@
+ #include "AAppIconLabel.hpp"
+ 
+ #include <gdkmm/pixbuf.h>
+-#include <glibmm/exception.h>
++#include <glibmm/error.h>
+ #include <glibmm/fileutils.h>
+ #include <glibmm/keyfile.h>
+ #include <glibmm/miscutils.h>
+@@ -183,7 +183,7 @@ void AAppIconLabel::updateAppIcon() {
+ 
+         image_.property_paintable().set_value(texture);
+         image_.set_visible(true);
+-      } catch (const Glib::Exception& e) {
++      } catch (const Glib::Error& e) {
+         spdlog::warn("Failed to load app icon {}: {}", app_icon_name_, std::string(e.what()));
+         image_.set_visible(false);
+       }
+diff --git a/src/AIconLabel.cpp b/src/AIconLabel.cpp
+index 1390f68e86..49e73c5fd1 100644
+--- a/src/AIconLabel.cpp
++++ b/src/AIconLabel.cpp
+@@ -1,7 +1,7 @@
+ #include "AIconLabel.hpp"
+ 
+ #include <gdkmm/pixbuf.h>
+-#include <glibmm/exception.h>
++#include <glibmm/error.h>
+ #include <spdlog/spdlog.h>
+ 
+ #include <regex>
+@@ -97,7 +97,7 @@ auto AIconLabel::doUpdate() -> void {
+         auto texture{Gdk::Texture::create_for_pixbuf(pixbuf)};
+         image_.set(texture);
+         image_.set_visible(true);
+-      } catch (const Glib::Exception& e) {
++      } catch (const Glib::Error& e) {
+         spdlog::warn("Failed to load embedded icon {}: {}", iconLabel, std::string(e.what()));
+         image_.set_visible(false);
+       }
+diff --git a/src/main.cpp b/src/main.cpp
+index 433c342f6e..55dc357a4b 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1,5 +1,5 @@
+ #include <fcntl.h>
+-#include <glibmm/exception.h>
++#include <glibmm/error.h>
+ #include <spdlog/spdlog.h>
+ #include <sys/types.h>
+ #include <sys/wait.h>
+@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
+   } catch (const std::exception& e) {
+     spdlog::error("{}", e.what());
+     return 1;
+-  } catch (const Glib::Exception& e) {
++  } catch (const Glib::Error& e) {
+     spdlog::error("{}", static_cast<std::string>(e.what()));
+     return 1;
+   }
+diff --git a/src/modules/image.cpp b/src/modules/image.cpp
+index 78a5e51d64..fa23e5dcb5 100644
+--- a/src/modules/image.cpp
++++ b/src/modules/image.cpp
+@@ -1,6 +1,6 @@
+ #include "modules/image.hpp"
+ 
+-#include <glibmm/exception.h>
++#include <glibmm/error.h>
+ #include <json/value.h>
+ 
+ #include <config.hpp>
+@@ -246,7 +246,7 @@ void SingleImageStrategy::doUpdate(Gtk::Box& box, const Json::Value& config, int
+     int scaled_icon_size = size * image_.get_scale_factor();
+     try {
+       pixbuf = Gdk::Pixbuf::create_from_file(path_, scaled_icon_size, scaled_icon_size);
+-    } catch (const Glib::Exception& e) {
++    } catch (const Glib::Error& e) {
+       spdlog::warn("Failed to load image {}: {}", path_, std::string(e.what()));
+       pixbuf.reset();
+     }

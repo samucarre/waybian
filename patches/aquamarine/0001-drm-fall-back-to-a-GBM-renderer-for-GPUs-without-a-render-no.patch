@@ -1,0 +1,33 @@
+From cd69728a118f128e75c8b6558326cb213547eddd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Mon, 26 Oct 2026 19:16:57 +0100
+Subject: [PATCH] drm: fall back to a GBM renderer for GPUs without a render
+ node (Apple dcpext/HDMI on the M3)
+
+On Apple Silicon the external display controller (apple-drm-ext) has no render node, so initMgpu could not create a renderer and the secondary output stayed black. Try the GBM platform on the allocator before giving up. Tested on a MacBook Pro M3 Max (Debian 13, Hyprland 0.55).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/backend/drm/DRM.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/backend/drm/DRM.cpp b/src/backend/drm/DRM.cpp
+index 0ae0434f..9054cd2b 100644
+--- a/src/backend/drm/DRM.cpp
++++ b/src/backend/drm/DRM.cpp
+@@ -621,6 +621,15 @@ bool Aquamarine::CDRMBackend::initMgpu() {
+ 
+     rendererState.renderer = CDRMRenderer::attempt(backend.lock(), gpu->renderNodeFd >= 0 ? gpu->renderNodeFd : gpu->fd);
+ 
++    // A KMS-only secondary (e.g. the HDMI/dcpext card of Apple Silicon, a separate apple-drm device with no render
++    // node) has no EGL device of its own, so the device-platform attempt above always fails and the output can never
++    // be blitted to. Fall back to the GBM platform on its own allocator (Mesa kmsro picks the real GPU). Secondaries
++    // only: the primary keeps its current renderer path.
++    if (!rendererState.renderer && primary && gpu->renderNodeFd < 0) {
++        backend->log(AQ_LOG_WARNING, std::format("drm: initMgpu: no EGL device for {}, trying the GBM platform on its allocator", gpu->path));
++        rendererState.renderer = CDRMRenderer::attempt(backend.lock(), newAllocator);
++    }
++
+     if (!rendererState.renderer) {
+         backend->log(AQ_LOG_ERROR, "drm: initMgpu: no renderer");
+         return false;

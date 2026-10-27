@@ -1,0 +1,24 @@
+[submodule "forks/Waybar"]
+	path = forks/Waybar
+	url = https://github.com/samucarre/Waybar.git
+	branch = gtk4-debian13-m3
+[submodule "forks/aquamarine"]
+	path = forks/aquamarine
+	url = https://github.com/samucarre/aquamarine.git
+	branch = hdmi-apple-drm-ext
+[submodule "forks/postcard"]
+	path = forks/postcard
+	url = https://github.com/samucarre/postcard.git
+	branch = debian13-m3
+[submodule "forks/omdrop-awdl"]
+	path = forks/omdrop-awdl
+	url = https://github.com/samucarre/omdrop-awdl.git
+	branch = discoverable-rapido
+[submodule "forks/libva-v4l2_request"]
+	path = forks/libva-v4l2_request
+	url = https://github.com/samucarre/libva-v4l2_request.git
+	branch = avd-fixes
+[submodule "forks/xdg-desktop-portal-gtk4"]
+	path = forks/xdg-desktop-portal-gtk4
+	url = https://github.com/samucarre/xdg-desktop-portal-gtk4.git
+	branch = master

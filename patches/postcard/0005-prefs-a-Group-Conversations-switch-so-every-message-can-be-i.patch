@@ -1,0 +1,183 @@
+From 4eba53e7f27ca2a7e9283ee3b13e4c93705d0d34 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 11:06:32 +0100
+Subject: [PATCH] prefs: a "Group Conversations" switch so every message can be
+ its own row
+
+Postcard threads by reply headers and then by subject, so fifteen
+unrelated notices that share a subject collapsed into one row with
+"(15)". New gsettings key group-conversations (default on, as before).
+Off, the list and the search hand back one Conversation per message,
+with the message id as the row id so rows of a former thread don't
+collide.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ data/in.gxanshu.postcard.gschema.xml     |  5 +++++
+ src/postcard/core/models/conversation.py |  7 ++++++-
+ src/postcard/core/store/database.py      | 17 ++++++++++++-----
+ src/postcard/preferences_dialog.py       |  4 ++++
+ src/postcard/window.py                   |  9 +++++++++
+ src/ui/preferences-dialog.blp            |  5 +++++
+ 6 files changed, 41 insertions(+), 6 deletions(-)
+
+diff --git a/data/in.gxanshu.postcard.gschema.xml b/data/in.gxanshu.postcard.gschema.xml
+index dd76ddd..0f27c69 100644
+--- a/data/in.gxanshu.postcard.gschema.xml
++++ b/data/in.gxanshu.postcard.gschema.xml
+@@ -21,6 +21,11 @@
+ 			<summary>Show account names in the sidebar</summary>
+ 			<description>Show each account's display name in the folder sidebar instead of its email address.</description>
+ 		</key>
++		<key name="group-conversations" type="b">
++			<default>true</default>
++			<summary>Group messages into conversations</summary>
++			<description>Show replies and messages with the same subject as one conversation. Off, every message is its own row.</description>
++		</key>
+ 		<key name="run-in-background" type="b">
+ 			<default>false</default>
+ 			<summary>Keep running in the background</summary>
+diff --git a/src/postcard/core/models/conversation.py b/src/postcard/core/models/conversation.py
+index 7e6fd18..f6b6c10 100644
+--- a/src/postcard/core/models/conversation.py
++++ b/src/postcard/core/models/conversation.py
+@@ -6,12 +6,17 @@
+ class Conversation(GObject.Object):
+     __gtype_name__ = "PostcardConversation"
+ 
+-    def __init__(self, emails: list[Email]) -> None:
++    def __init__(self, emails: list[Email], id: int | None = None) -> None:
+         super().__init__()
+         self.emails: list[Email] = emails
++        # With conversation grouping off, every message is its own row and must
++        # not share the id of the thread it would otherwise belong to.
++        self._id: int | None = id
+ 
+     @property
+     def id(self) -> int:
++        if self._id is not None:
++            return self._id
+         return self.emails[0].conversation_id or self.emails[0].id
+ 
+     @property
+diff --git a/src/postcard/core/store/database.py b/src/postcard/core/store/database.py
+index 28185f8..f80d535 100644
+--- a/src/postcard/core/store/database.py
++++ b/src/postcard/core/store/database.py
+@@ -113,6 +113,9 @@ def __init__(self, path: str | None = None) -> None:
+ 
+         self._conn = sqlite3.connect(path)
+         self._conn.row_factory = sqlite3.Row
++        # Mirrors the "group-conversations" setting: off, every message is
++        # listed on its own instead of threaded by reply headers and subject.
++        self.group_conversations: bool = True
+         # A sync commits once per message it stores, and the default journal
+         # fsyncs on every one of those. Under WAL a commit is an append, and
+         # NORMAL leaves the fsync to the checkpoint -- the durability given up
+@@ -496,11 +499,13 @@ def search_conversations(
+             return self.conversations_in_folders(folder_ids)
+ 
+         places = ",".join("?" * len(folder_ids))
++        # Ungrouped, only the matching messages themselves are listed.
++        thread_key = "COALESCE({0}conversation_id, {0}id)" if self.group_conversations else "{0}id"
+         rows = self._conn.execute(
+             f"""
+             SELECT {_EMAIL_COLUMNS} FROM emails
+-            WHERE folder_id IN ({places}) AND COALESCE(conversation_id, id) IN (
+-                SELECT COALESCE(e.conversation_id, e.id)
++            WHERE folder_id IN ({places}) AND {thread_key.format("")} IN (
++                SELECT {thread_key.format("e.")}
+                 FROM emails_fts f
+                 JOIN emails e ON e.id = f.rowid
+                 WHERE e.folder_id IN ({places}) AND emails_fts MATCH ?
+@@ -516,13 +521,15 @@ def _conversations_from_rows(
+         groups: dict[int, list[Email]] = {}
+         for row in rows:
+             email = self._email_from_row(row)
+-            key = email.conversation_id or email.id
++            key = (email.conversation_id or email.id) if self.group_conversations else email.id
+             groups.setdefault(key, []).append(email)
+ 
+         conversations = []
+-        for mails in groups.values():
++        for key, mails in groups.items():
+             mails.sort(key=_arrival_key)  # oldest first, so .latest is right
+-            conversations.append(Conversation(mails))
++            conversations.append(
++                Conversation(mails) if self.group_conversations else Conversation(mails, id=key)
++            )
+         thread_key = _sent_key if is_multi_folder else _arrival_key
+         conversations.sort(key=lambda c: thread_key(c.latest), reverse=True)
+         return conversations
+diff --git a/src/postcard/preferences_dialog.py b/src/postcard/preferences_dialog.py
+index ae7ec07..18f76e8 100644
+--- a/src/postcard/preferences_dialog.py
++++ b/src/postcard/preferences_dialog.py
+@@ -24,6 +24,7 @@ class PostcardPreferencesDialog(Adw.PreferencesDialog):
+     images_row: Adw.SwitchRow = Gtk.Template.Child()
+     avatars_row: Adw.SwitchRow = Gtk.Template.Child()
+     account_names_row: Adw.SwitchRow = Gtk.Template.Child()
++    group_conversations_row: Adw.SwitchRow = Gtk.Template.Child()
+     background_row: Adw.SwitchRow = Gtk.Template.Child()
+     autostart_row: Adw.SwitchRow = Gtk.Template.Child()
+     signature_enabled_row: Adw.SwitchRow = Gtk.Template.Child()
+@@ -41,6 +42,9 @@ def __init__(self, settings: Gio.Settings) -> None:
+         settings.bind(
+             "show-account-display-name", self.account_names_row, "active", flags
+         )
++        settings.bind(
++            "group-conversations", self.group_conversations_row, "active", flags
++        )
+         settings.bind("run-in-background", self.background_row, "active", flags)
+         settings.bind("signature-enabled", self.signature_enabled_row, "active", flags)
+         settings.bind("signature-is-html", self.signature_html_row, "active", flags)
+diff --git a/src/postcard/window.py b/src/postcard/window.py
+index ea2a45d..540b8a5 100644
+--- a/src/postcard/window.py
++++ b/src/postcard/window.py
+@@ -224,6 +224,10 @@ def __init__(
+         self._avatar_handler = self._settings.connect(
+             "changed::load-sender-avatars", lambda *_: self._refresh_conversations()
+         )
++        self._db.group_conversations = self._settings.get_boolean("group-conversations")
++        self._grouping_handler = self._settings.connect(
++            "changed::group-conversations", self._on_grouping_changed
++        )
+         self._account_label_handler = self._settings.connect(
+             f"changed::{SETTING_ACCOUNT_DISPLAY_NAME}",
+             lambda *_: self._relabel_accounts(),
+@@ -459,6 +463,7 @@ def _on_close_request(self, _window: Gtk.Window) -> bool:
+         mail_sync.close_sessions()
+         self._network.disconnect(self._network_handler)
+         self._settings.disconnect(self._avatar_handler)
++        self._settings.disconnect(self._grouping_handler)
+         self._settings.disconnect(self._account_label_handler)
+         if self._clock_subscription:
+             Gio.bus_get_sync(Gio.BusType.SESSION).signal_unsubscribe(
+@@ -1710,6 +1715,10 @@ def _select_folder_by_id(self, folder_id: int) -> None:
+     # search query if one is typed. Called on folder change and search change.
+     # keep_id re-selects that conversation if it's still in the list, so a mail
+     # action can refresh without reloading the reader.
++    def _on_grouping_changed(self, settings: Gio.Settings, key: str) -> None:
++        self._db.group_conversations = settings.get_boolean(key)
++        self._refresh_conversations()
++
+     def _refresh_conversations(self, keep_id: int | None = None) -> None:
+         if self._current_folder is None:
+             return
+diff --git a/src/ui/preferences-dialog.blp b/src/ui/preferences-dialog.blp
+index d1f8bd8..b0124e6 100644
+--- a/src/ui/preferences-dialog.blp
++++ b/src/ui/preferences-dialog.blp
+@@ -28,6 +28,11 @@ template $PostcardPreferencesDialog: Adw.PreferencesDialog {
+         subtitle: _("Name accounts in the sidebar by their display name instead of their address");
+       }
+ 
++      Adw.SwitchRow group_conversations_row {
++        title: _("Group Conversations");
++        subtitle: _("Show replies and same-subject messages as one row; off, each message is its own row");
++      }
++
+       Adw.SwitchRow background_row {
+         title: _("Run in Background");
+         subtitle: _("Keep checking for mail after the window is closed");

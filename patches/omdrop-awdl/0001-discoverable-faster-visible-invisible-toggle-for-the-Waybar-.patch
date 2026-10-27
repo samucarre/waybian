@@ -1,0 +1,36 @@
+From ce623f52eed51bdfa267058bf0a694fd72cd962e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Mon, 26 Oct 2026 19:21:30 +0100
+Subject: [PATCH] discoverable: faster visible/invisible toggle for the Waybar
+ AirDrop button (M3 Max, Debian 13)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ userspace/omdrop-discoverable | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/userspace/omdrop-discoverable b/userspace/omdrop-discoverable
+index 7d6cb2d..e21590b 100755
+--- a/userspace/omdrop-discoverable
++++ b/userspace/omdrop-discoverable
+@@ -227,7 +227,10 @@ supervise(){
+     # defers a trap until the foreground command ends: with a plain sleep, a
+     # stop followed quickly by a start let this supervisor's trap fire seconds
+     # later and tear down the new window.
+-    sleep "$ADV_INTERVAL" & wait $!
++    # Rápido (25-oct-2026): las dos primeras vueltas cada 2 s, para que la plantilla recoja enseguida la elección
++    # real (en frío ya no se esperan 3 s a que se asiente antes de publicarla).
++    local nap=$ADV_INTERVAL; (( seq <= 2 )) && nap=2
++    sleep "$nap" & wait $!
+   done
+   log "window expired"
+   kill_children
+@@ -439,7 +442,7 @@ cmd_start(){
+   # Wait for the supervisor to claim the window, so `start` never returns 0 on
+   # a window that failed to come up.
+   local i
+-  for i in 1 2 3 4 5 6 7 8 9 10; do supervisor_alive && break; sleep 0.5; done
++  for i in $(seq 50); do supervisor_alive && break; sleep 0.1; done   # rápido (25-oct-2026): cada 0,1 s, mismo tope de 5 s
+   supervisor_alive || { rm -f "$RUN/supervisor.token"; printf stopped > "$RUN/reason"; die 3 "supervisor did not start"; }
+   if (( secs > 0 )); then
+     log "discoverable until $(date -u -d "@$until" +%H:%M:%SZ) (${secs}s)"

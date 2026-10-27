@@ -118,7 +118,7 @@ Cada programa que ha necesitado un cambio tiene un fork con su rama, para poder 
 | xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | espejo (diálogos de ficheros GTK4 para Hyprland) |
 | Kernel | fork privado del árbol de Aurora | parches locales, configuraciones y scripts de instalación; ver [docs/kernel-gpu.md](docs/kernel-gpu.md) |
 
-Lista completa y recetas: [docs/forks.md](docs/forks.md).
+Los forks están montados como submódulos de git en [`forks/`](forks) (cada uno fijado al commit exacto que corre en la máquina), y cada commit nuestro se puede leer también como parche en [`patches/`](patches). Lista completa, bases y recetas: [docs/forks.md](docs/forks.md).
 
 ## Cómo se hizo
 

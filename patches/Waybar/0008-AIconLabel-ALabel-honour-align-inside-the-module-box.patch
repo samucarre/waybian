@@ -1,0 +1,51 @@
+From 7f9329eacf897dd9e45f5e6056395981098ede5e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 10:45:54 +0100
+Subject: [PATCH] AIconLabel/ALabel: honour "align" inside the module box
+
+In the GTK4 port the box carries the module's CSS name, so min-width
+applies to the box while the label kept its natural width at the start:
+"align" had no visible effect. Let the label fill the box, and for
+ellipsized labels (laid out over the whole width) derive the
+justification from "align" when none is configured.
+---
+ src/AIconLabel.cpp |  4 ++++
+ src/ALabel.cpp     | 10 ++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/src/AIconLabel.cpp b/src/AIconLabel.cpp
+index 49e73c5fd1..293436e192 100644
+--- a/src/AIconLabel.cpp
++++ b/src/AIconLabel.cpp
+@@ -59,6 +59,10 @@ AIconLabel::AIconLabel(const Json::Value& config, const std::string& name, const
+     box_.append(label_);
+     box_.append(image_);
+   }
++  /* The box carries the CSS name (min-width, padding): let the label fill it so that the
++   * module's "align" (xalign) positions the text inside, as the GTK3 label did. */
++  label_.set_hexpand(true);
++  label_.set_halign(Gtk::Align::FILL);
+ }
+ 
+ std::tuple<std::string, std::string> AIconLabel::extractIcon(const std::string& input) {
+diff --git a/src/ALabel.cpp b/src/ALabel.cpp
+index a447a6c29b..0ad8da27c1 100644
+--- a/src/ALabel.cpp
++++ b/src/ALabel.cpp
+@@ -70,6 +70,16 @@ ALabel::ALabel(const Json::Value& config, const std::string& name, const std::st
+     }
+   }
+ 
++  if (config_["align"].isDouble() && !config_["justify"].isString() &&
++      label_.get_ellipsize() != Pango::EllipsizeMode::NONE) {
++    /* GTK4 lays an ellipsized label out over its whole width, so the text position inside comes
++     * from the justification, not from xalign: derive it from "align" (GTK3 centred it). */
++    auto align = config_["align"].asFloat();
++    label_.set_justify(align < 0.34f   ? Gtk::Justification::LEFT
++                       : align > 0.66f ? Gtk::Justification::RIGHT
++                                       : Gtk::Justification::CENTER);
++  }
++
+   if (config_["justify"].isString()) {
+     auto justify_str = config_["justify"].asString();
+     if (justify_str == "left") {

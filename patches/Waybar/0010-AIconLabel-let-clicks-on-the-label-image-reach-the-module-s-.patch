@@ -1,0 +1,28 @@
+From 175999c35ad1f2d0b8cf943462af91c4140fe594 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 10:55:21 +0100
+Subject: [PATCH] AIconLabel: let clicks on the label/image reach the module's
+ gestures
+
+The click and scroll gestures are attached to the module box in the
+TARGET phase, so a click whose target was the label or the image never
+reached them: only the padding reacted. Make the children untargetable.
+---
+ src/AIconLabel.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/AIconLabel.cpp b/src/AIconLabel.cpp
+index 293436e19..4723f160f 100644
+--- a/src/AIconLabel.cpp
++++ b/src/AIconLabel.cpp
+@@ -63,6 +63,10 @@ AIconLabel::AIconLabel(const Json::Value& config, const std::string& name, const
+    * module's "align" (xalign) positions the text inside, as the GTK3 label did. */
+   label_.set_hexpand(true);
+   label_.set_halign(Gtk::Align::FILL);
++  /* The click/scroll gestures live on the box in the TARGET phase: a click whose target is the
++   * label or the image would never reach them. Let the box be the only target. */
++  label_.set_can_target(false);
++  image_.set_can_target(false);
+ }
+ 
+ std::tuple<std::string, std::string> AIconLabel::extractIcon(const std::string& input) {

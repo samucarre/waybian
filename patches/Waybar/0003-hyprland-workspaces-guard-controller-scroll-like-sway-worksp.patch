@@ -1,0 +1,30 @@
+From bc5754a97bda13a42215fa52c1f05332af987294 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Mon, 26 Oct 2026 18:47:49 +0100
+Subject: [PATCH] hyprland/workspaces: guard controller_scroll_ like
+ sway/workspaces does
+
+With "disable-scroll": true (or no on-scroll-* actions) AModule never creates
+controller_scroll_, and init() dereferenced the null RefPtr in
+set_propagation_phase(), crashing at startup. Same fix as the one applied to
+sway/workspaces on 2026-10-08.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/modules/hyprland/workspaces.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/modules/hyprland/workspaces.cpp b/src/modules/hyprland/workspaces.cpp
+index 4b726b89e9..bea5ae6c5d 100644
+--- a/src/modules/hyprland/workspaces.cpp
++++ b/src/modules/hyprland/workspaces.cpp
+@@ -58,7 +58,8 @@ void Workspaces::init() {
+   }
+ 
+   bindEvents(m_box_);
+-  controller_scroll_->set_propagation_phase(Gtk::PropagationPhase::BUBBLE);
++  if (controller_scroll_)  // igual que en sway/workspaces: sin on-scroll o con disable-scroll el controlador es nulo
++    controller_scroll_->set_propagation_phase(Gtk::PropagationPhase::BUBBLE);
+ 
+   dp.emit();
+ }
