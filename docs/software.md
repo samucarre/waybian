@@ -38,7 +38,7 @@ GTK3 cannot be removed from the system (47 packages depend on it, Chrome among t
 | Google Chrome | Chromium; GTK4 for dialogs (`--gtk-version=4`) | vendor repo | hardware video decode through VA‑API (`libva-v4l2-request`) |
 | Postcard (mail) | GTK 4.20 + libadwaita 1.8 + WebKitGTK 6.0 | **built from our fork**, into `/opt/gtk420`, on Python 3.15 | replaced Thunderbird (GTK3, no port) |
 | WordCraft, GridCraft, DeckCraft, PdfCraft, PhotoCraft | Rust (iced/winit) on Vulkan | upstream releases (checksum pinned) | office suite drawn by the GPU; each exposes an MCP server |
-| LibreOffice | GTK3 (headless use mostly) | Debian 13 | the GTK4 VCL crashes; hidden from the menu, used for conversions and for the legacy .xls/.ppt/.odp formats |
+| LibreOffice | GTK3, headless | Debian 13 | not for the user: hidden from the menu, it is the tool the AI assistant (Claude Code) drives to build and convert Office documents (docx/xlsx/pptx skills), because the Craft apps' MCP servers are not mature enough for that yet. Its GTK4 backend crashes. Also the default for legacy .xls/.ppt/.odp |
 | mpv 0.40 | OpenGL/Vulkan, `hwdec` | Debian 13 | hardware decode |
 | Telegram Desktop 5.7 | Qt 5 + Vulkan | backports | |
 | WhatsApp | Chrome app window (GTK4 dialogs) | — | replaced a WebKitGTK wrapper that stuttered |

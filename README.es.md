@@ -134,7 +134,7 @@ La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la
 | Google Chrome | Chromium, diálogos GTK4 (`--gtk-version=4`), vídeo por hardware | repositorio del fabricante |
 | Postcard (correo) | GTK 4.20 + libadwaita 1.8 + WebKitGTK, Python 3.15 | **compilado de nuestro fork** |
 | WordCraft · GridCraft · DeckCraft · PdfCraft · PhotoCraft | Rust (iced) sobre Vulkan | releases upstream |
-| LibreOffice | GTK3, casi solo sin ventana (conversiones y los formatos antiguos .xls/.ppt/.odp) | Debian 13 |
+| LibreOffice | GTK3, solo sin ventana y oculto del menú: la herramienta con la que el asistente de IA (Claude Code) crea y convierte documentos de Office, porque los MCP de las Craft todavía no le sirven lo bastante; abre también los formatos antiguos .xls/.ppt/.odp | Debian 13 |
 | mpv 0.40 | OpenGL/Vulkan, `hwdec` | Debian 13 |
 | Telegram Desktop 5.7 | Qt 5 + Vulkan | backports |
 | WhatsApp | ventana de app de Chrome | — |
