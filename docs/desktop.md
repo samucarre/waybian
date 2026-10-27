@@ -1,6 +1,6 @@
 # Desktop
 
-Hyprland 0.55 (Wayland) on Debian 13, with the tools and habits of a Mac user kept where they made sense.
+Hyprland 0.56 (Wayland) on Debian 14, with the tools and habits of a Mac user kept where they made sense.
 
 ## Session
 
@@ -35,7 +35,7 @@ Upstream Waybar is GTK3; the GTK4 port (upstream PR #5366) plus local fixes (a s
 ## GTK4 everywhere
 
 - File dialogs for Hyprland through a GTK4 portal (`xdg-desktop-portal-gtk4`), Nautilus, `fuzzel` as launcher, `satty`, `mako`, `hypridle`/`hyprlock`, Chrome with `--gtk-version=4`. Electron apps, Thunderbird and LibreOffice cannot follow yet.
-- **Mail: Postcard.** Debian 13 ships GTK 4.18 and libadwaita 1.7; Postcard needs libadwaita 1.8 (`Adw.ShortcutsDialog`), which needs GTK ≥ 4.19.4. Both were built into a private prefix (`/opt/gtk420`) used only by Postcard, with the X11 backend enabled because Debian's WebKitGTK references `gdk_x11_*` symbols. Postcard runs on an official Python 3.15 build (installed with `uv`) with PyGObject built in a venv, because its inbox watcher uses `IMAP4.idle()` (Python ≥ 3.14). Two generic findings from the fork:
+- **Mail: Postcard.** Debian 14 ships GTK 4.18 and libadwaita 1.7; Postcard needs libadwaita 1.8 (`Adw.ShortcutsDialog`), which needs GTK ≥ 4.19.4. Both were built into a private prefix (`/opt/gtk420`) used only by Postcard, with the X11 backend enabled because Debian's WebKitGTK references `gdk_x11_*` symbols. Postcard runs on an official Python 3.15 build (installed with `uv`) with PyGObject built in a venv, because its inbox watcher uses `IMAP4.idle()` (Python ≥ 3.14). Two generic findings from the fork:
   - **iCloud IMAP answers `UID SEARCH ALL` from a stale index** that still lists messages moved or deleted long ago (129k UIDs for a mailbox of 119k). Any client that prunes its cache with `SEARCH ALL` keeps ghosts that open as "no message body". `UID SEARCH UID 1:*` (or `UNDELETED`) is exact, and faster.
   - iCloud does not push `EXISTS` to every idling session; a watcher that depends on IDLE alone can miss a message for the length of its IDLE period. Short IDLE periods with a cheap `SEARCH` after each one are the safe pattern.
 - D‑Bus-activated services (Nautilus and whatever it launches) only see the environment passed with `dbus-update-activation-environment`; `DISPLAY` had to be added for Xwayland applications opened from the file manager.

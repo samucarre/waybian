@@ -8,17 +8,17 @@
 
 # WayBian
 
-**Debian 13 running natively on a MacBook Pro 16" M3 Max — Wayland desktop (Hyprland), GPU acceleration, Wi‑Fi, sound, AirDrop, external HDMI, dual boot with macOS.**
+**Debian 14 running natively on a MacBook Pro 16" M3 Max — Wayland desktop (Hyprland), GPU acceleration, Wi‑Fi, sound, AirDrop, external HDMI, dual boot with macOS.**
 
 *Leer en español: [README.es.md](README.es.md).*
 
-WayBian (Wayland + Debian) is a hand-assembled Debian 13 "trixie" system for the 2023 MacBook Pro 16" with the Apple M3 Max (Apple board `j516c`, SoC `t6031`). Nobody ships a ready-made Linux for this machine: Asahi Linux's M3 support (September 2026) is an initial kernel with no GPU driver and no distribution, and Debian's own Apple Silicon installer ("Bananas") only accepts M1/M2 firmware. WayBian puts the pieces together — Asahi's boot chain, the Aurora Silicon kernel and GPU driver, Debian's userland — and fixes what is missing in between.
+WayBian (Wayland + Debian) is a hand-assembled Debian system (Debian 14 "forky", the testing branch, since 27 Oct 2026; it started on Debian 13 "trixie") for the 2023 MacBook Pro 16" with the Apple M3 Max (Apple board `j516c`, SoC `t6031`). Nobody ships a ready-made Linux for this machine: Asahi Linux's M3 support (September 2026) is an initial kernel with no GPU driver and no distribution, and Debian's own Apple Silicon installer ("Bananas") only accepts M1/M2 firmware. WayBian puts the pieces together — Asahi's boot chain, the Aurora Silicon kernel and GPU driver, Debian's userland — and fixes what is missing in between.
 
 This repository is the **presentation** of the project: what it is, how it works, what works and what does not, and which pieces were changed. It exists to share the result with people who want the same thing, and to learn from anyone who knows better. Issues and Discussions are open.
 
 The day-to-day record (every change with its reason, a mirror of every configuration file, patches, and the scripts that rebuild the system from scratch) lives in a separate private repository, `waybian-lab`. Ask if you need something from it.
 
-> **Status (27 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Kernel `7.2.11-waybian-0.2`. Expect rough edges.
+> **Status (27 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.2`. Expect rough edges.
 
 ## The machine
 
@@ -28,6 +28,7 @@ The day-to-day record (every change with its reason, a mirror of every configura
 | SoC | Apple M3 Max `t6031`: 16-core CPU (12P + 4E), 40-core GPU (G15C), 64 GB |
 | Apple board id | `j516c` (`t6031-j516c.dts` in the kernel) |
 | Storage | 1 TB SSD: macOS 27 on ~800 GiB, Linux root 122.5 GiB (ext4), both on the same disk |
+| Debian | 14 "forky" (testing), upgraded from 13 "trixie" on 27 Oct 2026 |
 | Page size | 16 KiB (required by Apple's IOMMUs; some binaries assume 4 KiB) |
 
 ## What works
@@ -66,7 +67,7 @@ Power button
      └─ APFS container "Debian" (stub, Permissive Security)   created by the Asahi installer
          └─ m1n1 stage 1 → ESP/m1n1/boot.bin (m1n1 stage 2 + device trees + U‑Boot)
              └─ U‑Boot (UEFI) → ESP/EFI/BOOT/BOOTAA64.EFI (GRUB)
-                 └─ Linux (Aurora/Asahi kernel) + initramfs → Debian 13 → greetd → Hyprland
+                 └─ Linux (Aurora/Asahi kernel) + initramfs → Debian 14 → greetd → Hyprland
 ```
 
 The Asahi installer is used in its **"UEFI environment only"** mode: it shrinks macOS, creates the stub container with macOS 14.8.3 firmware, installs m1n1 + U‑Boot and an ESP, and nothing else. Debian is written on top by hand. Debian's own `m1n1`, `u-boot-asahi` and `asahi-platform` packages are pinned out: they do not know the M3 and their post-install hook would overwrite `boot.bin` and leave the Mac unbootable. More in [docs/boot-chain.md](docs/boot-chain.md).
@@ -79,7 +80,7 @@ The Asahi installer is used in its **"UEFI environment only"** mode: it shrinks 
 
 ## Desktop
 
-Hyprland 0.55 on Wayland, with a workflow that keeps the habits of macOS:
+Hyprland 0.56 on Wayland, with a workflow that keeps the habits of macOS:
 
 - **Waybar ported to GTK4** (our fork of the upstream PR), with hand-written widgets: a one-click "workstation" layout, a recent-files panel with drag and drop, messaging counters (Discord, Telegram, WhatsApp, mail), remote desktops by groups, a Wi‑Fi panel that retries, a shortcuts cheat sheet, fans/temperatures/power, keyboard backlight, Tailscale, AirDrop and a small music player (Subsonic/Navidrome client playing through mpv).
 - **macOS shortcuts**: ⌘C/⌘V/⌘X everywhere (translated to Ctrl+Shift in the terminal, where Ctrl+C interrupts), ⌘F, ⌘W, ⌘T, ⌘⏎, ⌘+/⌘−, Ctrl+⌘F for full screen; ⌘⇧3/4/5 screenshots with the floating thumbnail; three-finger gestures.
@@ -112,19 +113,19 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 
 | Program | Role | Draws with | Origin |
 |---|---|---|---|
-| Hyprland 0.55 | compositor | OpenGL | Debian 13 backports |
+| Hyprland 0.56 | compositor | OpenGL | Debian 14 |
 | aquamarine (patched) | DRM/GBM backend | — | **built from our fork** |
 | Waybar (GTK4 port) | bar and widgets | GTK4 (Vulkan) | **built from our fork** |
-| fuzzel · mako · swaybg | launcher · notifications · wallpaper | Wayland native | Debian 13 |
-| kitty 0.41 | terminal | OpenGL | Debian 13 |
+| fuzzel · mako · swaybg | launcher · notifications · wallpaper | Wayland native | Debian 14 |
+| kitty 0.48 | terminal | OpenGL | Debian 14 |
 | greetd + tuigreet + own greeter | login | CPU on purpose | backports + ours |
 | hyprlock · hypridle · hyprpicker · hyprpolkitagent | lock, idle, picker, polkit | OpenGL / Wayland | backports |
-| grim · slurp · satty | screenshots, annotation | satty: GTK4 | Debian 13 · satty upstream binary |
+| grim · slurp · satty | screenshots, annotation | satty: GTK4 | Debian 14 · satty upstream binary |
 | xdg-desktop-portal-hyprland · portal-gtk4 | portals, file dialogs | GTK4 (Rust) | backports · **built from mirror** |
-| Nautilus 48 · Loupe 48 · sushi 46 | files, images, Quick Look | GTK4 + libadwaita | Debian 13 |
-| pavucontrol 6 | audio mixer | GTK4 | Debian 13 |
-| PipeWire · WirePlumber · asahi-audio · speakersafetyd | sound | — | Debian 13 + Asahi |
-| NetworkManager + iwd | network | — | Debian 13 |
+| Nautilus 51 · Loupe 51 · sushi 50 | files, images, Quick Look | GTK4 + libadwaita | Debian 14 |
+| pavucontrol 6 | audio mixer | GTK4 | Debian 14 |
+| PipeWire · WirePlumber · asahi-audio · speakersafetyd | sound | — | Debian 14 + Asahi |
+| NetworkManager + iwd | network | — | Debian 14 |
 | ~30 own panels and tools | recent files, messaging, remote desktops, Wi‑Fi, keyboard light, AirDrop, music, night light… | Python + GTK4 | ours |
 
 **Applications**
@@ -134,12 +135,12 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | Google Chrome | Chromium, GTK4 dialogs (`--gtk-version=4`), hardware video decode | vendor repo |
 | Postcard (mail) | GTK 4.20 + libadwaita 1.8 + WebKitGTK, Python 3.15 | **built from our fork** |
 | WordCraft · GridCraft · DeckCraft · PdfCraft · PhotoCraft | Rust (iced) on Vulkan | upstream releases |
-| LibreOffice | GTK3, headless only, hidden from the menu: the tool the AI assistant (Claude Code) uses to build and convert Office files, because the Craft apps' MCP servers are not mature enough for it yet; also opens legacy .xls/.ppt/.odp | Debian 13 |
-| mpv 0.40 | OpenGL/Vulkan, `hwdec` | Debian 13 |
+| LibreOffice | GTK3, headless only, hidden from the menu: the tool the AI assistant (Claude Code) uses to build and convert Office files, because the Craft apps' MCP servers are not mature enough for it yet; also opens legacy .xls/.ppt/.odp | Debian 14 |
+| mpv 0.41 | OpenGL/Vulkan, `hwdec` | Debian 14 |
 | Telegram Desktop 5.7 | Qt 5 + Vulkan | backports |
 | WhatsApp | Chrome app window | — |
 | Vesktop (Discord) · Claude Desktop | Electron (GTK3) | upstream |
-| Remmina 1.4 | GTK3 | Debian 13 |
+| Remmina 1.4 | GTK3 | Debian 14 |
 | Steam · Tailscale · Claude Code | — | upstream |
 
 **Built by us, not from apt:** Waybar GTK4, aquamarine, libva-v4l2_request, GTK 4.20 + libadwaita 1.8 + Postcard, Python 3.15 + PyGObject, xdg-desktop-portal-gtk4, Aurora's Mesa, the AVD firmware and the kernel. Still not GTK4: the Electron apps (Electron ignores the flag), LibreOffice (its GTK4 backend crashes) and Remmina (no port).
