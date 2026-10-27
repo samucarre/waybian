@@ -134,8 +134,7 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | Google Chrome | Chromium, GTK4 dialogs (`--gtk-version=4`), hardware video decode | vendor repo |
 | Postcard (mail) | GTK 4.20 + libadwaita 1.8 + WebKitGTK, Python 3.15 | **built from our fork** |
 | WordCraft · GridCraft · DeckCraft · PdfCraft · PhotoCraft | Rust (iced) on Vulkan | upstream releases |
-| ONLYOFFICE | Qt | vendor .deb |
-| LibreOffice | GTK3, mostly headless | Debian 13 |
+| LibreOffice | GTK3, mostly headless (conversions, legacy .xls/.ppt/.odp) | Debian 13 |
 | mpv 0.40 | OpenGL/Vulkan, `hwdec` | Debian 13 |
 | Telegram Desktop 5.7 | Qt 5 + Vulkan | backports |
 | WhatsApp | Chrome app window | — |
