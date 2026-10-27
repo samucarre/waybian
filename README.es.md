@@ -104,6 +104,47 @@ Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El i
   <sub>AirDrop desde un iPhone · la pantalla de inicio de sesión.</sub>
 </p>
 
+## Software
+
+La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la GPU y no la CPU, que es lo que gasta batería. Así que: primero Wayland nativo y GTK4; si no hay, un toolkit que siga dibujando con la GPU; Electron solo cuando no queda otra. Inventario completo con notas: [docs/software.md](docs/software.md).
+
+**Escritorio**
+
+| Programa | Función | Dibuja con | Origen |
+|---|---|---|---|
+| Hyprland 0.55 | compositor | OpenGL | backports de Debian 13 |
+| aquamarine (parcheada) | backend DRM/GBM | — | **compilada de nuestro fork** |
+| Waybar (port a GTK4) | barra y botones | GTK4 (Vulkan) | **compilada de nuestro fork** |
+| fuzzel · mako · swaybg | lanzador · avisos · fondo | Wayland nativo | Debian 13 |
+| kitty 0.41 | terminal | OpenGL | Debian 13 |
+| greetd + tuigreet + greeter propio | inicio de sesión | CPU a propósito | backports + nuestro |
+| hyprlock · hypridle · hyprpicker · hyprpolkitagent | bloqueo, inactividad, cuentagotas, polkit | OpenGL / Wayland | backports |
+| grim · slurp · satty | capturas y anotación | satty: GTK4 | Debian 13 · satty binario upstream |
+| xdg-desktop-portal-hyprland · portal-gtk4 | portales, diálogos de ficheros | GTK4 (Rust) | backports · **compilado del espejo** |
+| Nautilus 48 · Loupe 48 · sushi 46 | ficheros, imágenes, vista previa | GTK4 + libadwaita | Debian 13 |
+| pavucontrol 6 | mezclador de audio | GTK4 | Debian 13 |
+| PipeWire · WirePlumber · asahi-audio · speakersafetyd | sonido | — | Debian 13 + Asahi |
+| NetworkManager + iwd | red | — | Debian 13 |
+| ~30 paneles y herramientas propias | recientes, mensajería, escritorios remotos, Wi‑Fi, luz del teclado, AirDrop, música, luz nocturna… | Python + GTK4 | nuestros |
+
+**Aplicaciones**
+
+| Programa | Dibuja con | Origen |
+|---|---|---|
+| Google Chrome | Chromium, diálogos GTK4 (`--gtk-version=4`), vídeo por hardware | repositorio del fabricante |
+| Postcard (correo) | GTK 4.20 + libadwaita 1.8 + WebKitGTK, Python 3.15 | **compilado de nuestro fork** |
+| WordCraft · GridCraft · DeckCraft · PdfCraft · PhotoCraft | Rust (iced) sobre Vulkan | releases upstream |
+| ONLYOFFICE | Qt | .deb del fabricante |
+| LibreOffice | GTK3, casi solo sin ventana | Debian 13 |
+| mpv 0.40 | OpenGL/Vulkan, `hwdec` | Debian 13 |
+| Telegram Desktop 5.7 | Qt 5 + Vulkan | backports |
+| WhatsApp | ventana de app de Chrome | — |
+| Vesktop (Discord) · Claude Desktop | Electron (GTK3) | upstream |
+| Remmina 1.4 | GTK3 | Debian 13 |
+| Steam · Tailscale · Claude Code | — | upstream |
+
+**Compilado por nosotros, no de apt:** Waybar GTK4, aquamarine, libva-v4l2_request, GTK 4.20 + libadwaita 1.8 + Postcard, Python 3.15 + PyGObject, xdg-desktop-portal-gtk4, la Mesa de Aurora, el firmware del AVD y el kernel. Todavía sin GTK4: las apps Electron (Electron ignora la opción), LibreOffice (su backend GTK4 casca) y Remmina (sin port).
+
 ## Las piezas que se han cambiado
 
 Cada programa que ha necesitado un cambio tiene un fork con su rama, para poder reconstruir el sistema sin esperar a upstream:
