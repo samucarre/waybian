@@ -22,7 +22,7 @@ Each fork is mounted as a git submodule under `forks/` (pinned to the exact comm
 
 ### Waybar: GTK4 port + fixes for Debian 13 / M3
 
-Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m3), branch `gtk4-debian13-m3`, pinned at `fff9bf3` as `forks/Waybar`. Base: upstream PR Alexays/Waybar#5366 (GTK4 port).
+Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m3), branch `gtk4-debian13-m3`, pinned at `cef6e68` as `forks/Waybar`. Base: upstream PR Alexays/Waybar#5366 (GTK4 port).
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
@@ -37,6 +37,9 @@ Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m
 | 9 | 2026-10-27 | [DEBIAN-M3.md: notes for the output-removal and align fixes](https://github.com/samucarre/Waybar/commit/9fdd7e87fcac082c302d97a6279083bdc2926c0b) | [0009-DEBIAN-M3-md-notes-for-the-output-removal-and-align-fixes.patch](../patches/Waybar/0009-DEBIAN-M3-md-notes-for-the-output-removal-and-align-fixes.patch) |
 | 10 | 2026-10-27 | [AIconLabel: let clicks on the label/image reach the module's gestures](https://github.com/samucarre/Waybar/commit/175999c35ad1f2d0b8cf943462af91c4140fe594) | [0010-AIconLabel-let-clicks-on-the-label-image-reach-the-module-s-.patch](../patches/Waybar/0010-AIconLabel-let-clicks-on-the-label-image-reach-the-module-s-.patch) |
 | 11 | 2026-10-27 | [AIconLabel: bind the event controllers to the box, not the label](https://github.com/samucarre/Waybar/commit/fff9bf3ecc16de7db5fa4d20e283bd68f2bdb3d6) | [0011-AIconLabel-bind-the-event-controllers-to-the-box-not-the-lab.patch](../patches/Waybar/0011-AIconLabel-bind-the-event-controllers-to-the-box-not-the-lab.patch) |
+| 12 | 2026-10-27 | [ALabel: serve the tooltip through query-tooltip on the module widget](https://github.com/samucarre/Waybar/commit/f2007d2c748c1bfdfacbdc5488b188136a366976) | [0012-ALabel-serve-the-tooltip-through-query-tooltip-on-the-module.patch](../patches/Waybar/0012-ALabel-serve-the-tooltip-through-query-tooltip-on-the-module.patch) |
+| 13 | 2026-10-27 | [hyprland/backend: try the legacy dispatch before the Lua protocol](https://github.com/samucarre/Waybar/commit/cef6e68d9b17050f3b99086c547a9187bdbe67bd) | [0013-hyprland-backend-try-the-legacy-dispatch-before-the-Lua-prot.patch](../patches/Waybar/0013-hyprland-backend-try-the-legacy-dispatch-before-the-Lua-prot.patch) |
+
 
 ### aquamarine: GBM renderer for a DRM card without a render node (HDMI)
 

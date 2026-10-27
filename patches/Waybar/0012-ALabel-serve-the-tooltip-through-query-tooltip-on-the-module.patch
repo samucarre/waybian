@@ -1,0 +1,73 @@
+From f2007d2c748c1bfdfacbdc5488b188136a366976 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 13:22:51 +0100
+Subject: [PATCH] ALabel: serve the tooltip through query-tooltip on the module
+ widget
+
+set_tooltip_markup() makes GTK4 re-pick the widget under the pointer without
+GTK_PICK_NON_TARGETABLE. Since the AIconLabel label is no longer targetable,
+that pick lands on the box, GTK sees a different widget from the tooltip's
+and hides it: custom modules refreshing every few seconds never kept a
+tooltip open. Store the markup and answer query-tooltip from w_ instead;
+set_has_tooltip() only flips a flag, so a visible tooltip stays up.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ include/ALabel.hpp |  7 +++++++
+ src/ALabel.cpp     | 17 ++++++++++++++++-
+ 2 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/include/ALabel.hpp b/include/ALabel.hpp
+index 15ba275f2a..324257a720 100644
+--- a/include/ALabel.hpp
++++ b/include/ALabel.hpp
+@@ -32,6 +32,11 @@ class ALabel : public AModule {
+   std::string default_format_;
+ 
+   bool setLabelMarkup(const Glib::ustring& markup);
++  // Stores the markup and serves it through the module widget's query-tooltip
++  // signal. It never calls set_tooltip_markup(): in GTK4 that re-picks the
++  // widget under the pointer (without GTK_PICK_NON_TARGETABLE) and, for an
++  // AIconLabel whose label is not targetable, the pick lands on the box, which
++  // differs from the tooltip's widget, so GTK hid the tooltip on every refresh.
+   bool setTooltipMarkup(const Glib::ustring& markup);
+ 
+   // resolveTooltipFormat() / resolveFormat() are inherited from AModule.
+@@ -92,6 +97,8 @@ class ALabel : public AModule {
+   // no collation weight, so two different icons compare equal.
+   std::optional<std::string> last_label_markup_;
+   std::optional<std::string> last_tooltip_markup_;
++  bool tooltip_query_connected_ = false;
++  bool onQueryTooltip(int x, int y, bool keyboard_mode, const Glib::RefPtr<Gtk::Tooltip>& tooltip);
+ };
+ 
+ }  // namespace waybar
+diff --git a/src/ALabel.cpp b/src/ALabel.cpp
+index 0ad8da27c1..e5aa065252 100644
+--- a/src/ALabel.cpp
++++ b/src/ALabel.cpp
+@@ -109,8 +109,23 @@ bool ALabel::setTooltipMarkup(const Glib::ustring& markup) {
+     return false;
+   }
+ 
+-  label_.set_tooltip_markup(markup);
+   last_tooltip_markup_ = markup.raw();
++  // w_ is the module's event target: the label for a plain ALabel, the box for an AIconLabel
++  // (set in its constructor, so it is final by the time a module updates).
++  if (!tooltip_query_connected_) {
++    w_->signal_query_tooltip().connect(sigc::mem_fun(*this, &ALabel::onQueryTooltip), false);
++    tooltip_query_connected_ = true;
++  }
++  // set_has_tooltip() only flips a flag: no re-query, so a visible tooltip stays up.
++  w_->set_has_tooltip(!markup.empty());
++  return true;
++}
++
++bool ALabel::onQueryTooltip(int, int, bool, const Glib::RefPtr<Gtk::Tooltip>& tooltip) {
++  if (!last_tooltip_markup_ || last_tooltip_markup_->empty()) {
++    return false;
++  }
++  tooltip->set_markup(*last_tooltip_markup_);
+   return true;
+ }
+ 

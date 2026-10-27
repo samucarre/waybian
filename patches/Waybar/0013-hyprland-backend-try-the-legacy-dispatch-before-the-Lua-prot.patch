@@ -1,0 +1,83 @@
+From cef6e68d9b17050f3b99086c547a9187bdbe67bd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 13:41:58 +0100
+Subject: [PATCH] hyprland/backend: try the legacy dispatch before the Lua
+ protocol
+
+The version check (>= 0.54) assumed every such Hyprland speaks the Lua
+dispatch protocol, but 0.55.2 answers "Invalid dispatcher" to
+"/dispatch hl.dsp.focus(...)" and still takes "dispatch workspace N",
+so clicking a workspace button did nothing. Send the legacy form first
+and fall back to Lua only when the compositor rejects it; the outcome is
+cached so later clicks cost one round trip.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ include/modules/hyprland/backend.hpp |  1 +
+ src/modules/hyprland/backend.cpp     | 29 ++++++++++++++++++++++++----
+ 2 files changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/include/modules/hyprland/backend.hpp b/include/modules/hyprland/backend.hpp
+index 7c6369da72..6245d27e84 100644
+--- a/include/modules/hyprland/backend.hpp
++++ b/include/modules/hyprland/backend.hpp
+@@ -51,6 +51,7 @@ class IPC {
+   static bool isLuaProtocol();
+ 
+   static std::optional<bool> s_luaProtocolDetected_;  // cached detection result
++  static std::optional<bool> s_legacyDispatchWorks_;  // legacy "dispatch" accepted on a >= 0.54 compositor
+ 
+  private:
+   void socketListener();
+diff --git a/src/modules/hyprland/backend.cpp b/src/modules/hyprland/backend.cpp
+index 891bed1a41..3beca9bab4 100644
+--- a/src/modules/hyprland/backend.cpp
++++ b/src/modules/hyprland/backend.cpp
+@@ -21,6 +21,7 @@
+ namespace waybar::modules::hyprland {
+ 
+ std::filesystem::path IPC::socketFolder_;
++std::optional<bool> IPC::s_legacyDispatchWorks_;
+ std::optional<bool> IPC::s_luaProtocolDetected_;
+ 
+ std::filesystem::path IPC::getSocketFolder(const char* instanceSig) {
+@@ -375,15 +376,35 @@ std::string IPC::buildLuaDispatch(const std::string& dispatcher, const std::stri
+ }
+ 
+ std::string IPC::dispatch(const std::string& dispatcher, const std::string& arg) {
+-  if (isLuaProtocol()) {
+-    return getSocket1Reply(buildLuaDispatch(dispatcher, arg));
+-  }
+   // Legacy format: "dispatch <dispatcher> <arg>"
+   std::string cmd = "dispatch " + dispatcher;
+   if (!arg.empty()) {
+     cmd += " " + arg;
+   }
+-  return getSocket1Reply(cmd);
++  if (!isLuaProtocol()) {
++    return getSocket1Reply(cmd);
++  }
++  // The version check says >= 0.54, but not every build of that range speaks the Lua
++  // protocol: Hyprland 0.55.2 (Debian 13 on the M3 Max) answers "Invalid dispatcher" to
++  // "/dispatch hl.dsp.focus(...)" and still takes the legacy form. So send the legacy
++  // form first, which is a no-op error on a Lua-only compositor, and fall back to Lua
++  // only when it is rejected. The reply is cached so each click costs one round trip.
++  if (!s_legacyDispatchWorks_.has_value() || *s_legacyDispatchWorks_) {
++    const std::string reply = getSocket1Reply(cmd);
++    const bool rejected = reply.find("Invalid dispatcher") != std::string::npos ||
++                          reply.find("invalid dispatcher") != std::string::npos ||
++                          reply.find("unknown dispatcher") != std::string::npos;
++    if (!rejected) {
++      if (!s_legacyDispatchWorks_.has_value()) {
++        spdlog::info("Hyprland IPC: legacy dispatch accepted, using it instead of Lua");
++        s_legacyDispatchWorks_ = true;
++      }
++      return reply;
++    }
++    spdlog::info("Hyprland IPC: legacy dispatch rejected ({}), using the Lua protocol", reply);
++    s_legacyDispatchWorks_ = false;
++  }
++  return getSocket1Reply(buildLuaDispatch(dispatcher, arg));
+ }
+ 
+ }  // namespace waybar::modules::hyprland
