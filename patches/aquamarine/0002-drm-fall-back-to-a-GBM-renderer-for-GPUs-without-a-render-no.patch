@@ -1,0 +1,36 @@
+From 888d53663522e8e8123d38953ef8ec9dbd764b22 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 14:37:43 +0100
+Subject: [PATCH] =?UTF-8?q?drm:=20fall=20back=20to=20a=20GBM=20renderer=20?=
+ =?UTF-8?q?for=20GPUs=20without=20a=20render=20node=20(Apple=20dcpext/HDMI?=
+ =?UTF-8?q?=20on=20the=20M3)=20=E2=80=94=20rebased=20on=20v0.15.1=20for=20?=
+ =?UTF-8?q?Debian=2014=20(Hyprland=200.56)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/backend/drm/DRM.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/backend/drm/DRM.cpp b/src/backend/drm/DRM.cpp
+index 431247b5..8193af34 100644
+--- a/src/backend/drm/DRM.cpp
++++ b/src/backend/drm/DRM.cpp
+@@ -877,6 +877,15 @@ bool Aquamarine::CDRMBackend::initMgpu() {
+ 
+     rendererState.renderer = CDRMRenderer::attempt(backend.lock(), gpu->renderNodeFd >= 0 ? gpu->renderNodeFd : gpu->fd);
+ 
++    // A KMS-only secondary (e.g. the HDMI/dcpext card of Apple Silicon, a separate apple-drm device with no render
++    // node) has no EGL device of its own, so the device-platform attempt above always fails and the output can never
++    // be blitted to. Fall back to the GBM platform on its own allocator (Mesa kmsro picks the real GPU). Secondaries
++    // only: the primary keeps its current renderer path.
++    if (!rendererState.renderer && primary && gpu->renderNodeFd < 0) {
++        backend->log(AQ_LOG_WARNING, std::format("drm: initMgpu: no EGL device for {}, trying the GBM platform on its allocator", gpu->path));
++        rendererState.renderer = CDRMRenderer::attempt(backend.lock(), newAllocator);
++    }
++
+     if (!rendererState.renderer) {
+         backend->log(AQ_LOG_ERROR, "drm: initMgpu: no renderer");
+         return false;

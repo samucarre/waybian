@@ -40,15 +40,17 @@ Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m
 
 ### aquamarine: GBM renderer for a DRM card without a render node (HDMI)
 
-Fork [samucarre/aquamarine](https://github.com/samucarre/aquamarine/tree/hdmi-apple-drm-ext), branch `hdmi-apple-drm-ext`, pinned at `cd69728` as `forks/aquamarine`. Base: hyprwm/aquamarine v0.11.0.
+Fork [samucarre/aquamarine](https://github.com/samucarre/aquamarine/tree/hdmi-apple-drm-ext-0.15), branch `hdmi-apple-drm-ext-0.15`, pinned at `888d536` as `forks/aquamarine`. Base: hyprwm/aquamarine v0.15.1 (Debian 14); the branch `hdmi-apple-drm-ext` on v0.11.0 was the Debian 13 one.
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
 | 1 | 2026-10-26 | [drm: fall back to a GBM renderer for GPUs without a render node (Apple dcpext/HDMI on the M3)](https://github.com/samucarre/aquamarine/commit/cd69728a118f128e75c8b6558326cb213547eddd) | [0001-drm-fall-back-to-a-GBM-renderer-for-GPUs-without-a-render-no.patch](../patches/aquamarine/0001-drm-fall-back-to-a-GBM-renderer-for-GPUs-without-a-render-no.patch) |
+| 2 | 2026-10-27 | [drm: fall back to a GBM renderer for GPUs without a render node (Apple dcpext/HDMI on the M3) — rebased on v0.15.1 for Debian 14 (Hyprland 0.56)](https://github.com/samucarre/aquamarine/commit/888d53663522e8e8123d38953ef8ec9dbd764b22) | [0002-drm-fall-back-to-a-GBM-renderer-for-GPUs-without-a-render-no.patch](../patches/aquamarine/0002-drm-fall-back-to-a-GBM-renderer-for-GPUs-without-a-render-no.patch) |
+
 
 ### Postcard: OAuth without GOA, MCP, IMAP fixes, GTK 4.20 + Python 3.15 recipe
 
-Fork [samucarre/postcard](https://github.com/samucarre/postcard/tree/debian13-m3), branch `debian13-m3`, pinned at `ff9a126` as `forks/postcard`. Base: gxanshu/postcard 1.15.0.
+Fork [samucarre/postcard](https://github.com/samucarre/postcard/tree/debian13-m3), branch `debian13-m3`, pinned at `872df74` as `forks/postcard`. Base: gxanshu/postcard 1.15.0.
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
@@ -59,6 +61,8 @@ Fork [samucarre/postcard](https://github.com/samucarre/postcard/tree/debian13-m3
 | 5 | 2026-10-27 | [prefs: a "Group Conversations" switch so every message can be its own row](https://github.com/samucarre/postcard/commit/01aa53a4af9e1fc7b17d98d17b6f01ec41b77ab9) | [0005-prefs-a-Group-Conversations-switch-so-every-message-can-be-i.patch](../patches/postcard/0005-prefs-a-Group-Conversations-switch-so-every-message-can-be-i.patch) |
 | 6 | 2026-10-27 | [imap: IDLE on Python < 3.14, and prune with UID 1:* instead of SEARCH ALL (iCloud)](https://github.com/samucarre/postcard/commit/77af0e591ad48efd74d606d97b1257aa86adb45b) | [0006-imap-IDLE-on-Python-3-14-and-prune-with-UID-1-instead-of-SEA.patch](../patches/postcard/0006-imap-IDLE-on-Python-3-14-and-prune-with-UID-1-instead-of-SEA.patch) |
 | 7 | 2026-10-27 | [DEBIAN-M3.md: run Postcard on an official Python 3.15 build (uv) with PyGObject built in a venv](https://github.com/samucarre/postcard/commit/ff9a1262d7e246242115936e68a3c3ee341cbbb0) | [0007-DEBIAN-M3-md-run-Postcard-on-an-official-Python-3-15-build-u.patch](../patches/postcard/0007-DEBIAN-M3-md-run-Postcard-on-an-official-Python-3-15-build-u.patch) |
+| 8 | 2026-10-27 | [DEBIAN-M3.md: on Debian 14 the system GTK and Python are enough](https://github.com/samucarre/postcard/commit/872df74bc4acb2963c578c9093674146f6bbfeed) | [0008-DEBIAN-M3-md-on-Debian-14-the-system-GTK-and-Python-are-enou.patch](../patches/postcard/0008-DEBIAN-M3-md-on-Debian-14-the-system-GTK-and-Python-are-enou.patch) |
+
 
 ### omdrop-awdl (AirDrop): faster discoverable toggle
 

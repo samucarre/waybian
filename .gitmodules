@@ -5,7 +5,7 @@
 [submodule "forks/aquamarine"]
 	path = forks/aquamarine
 	url = https://github.com/samucarre/aquamarine.git
-	branch = hdmi-apple-drm-ext
+	branch = hdmi-apple-drm-ext-0.15
 [submodule "forks/postcard"]
 	path = forks/postcard
 	url = https://github.com/samucarre/postcard.git

@@ -1,0 +1,24 @@
+From 872df74bc4acb2963c578c9093674146f6bbfeed Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 15:35:24 +0100
+Subject: [PATCH] DEBIAN-M3.md: on Debian 14 the system GTK and Python are
+ enough
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ DEBIAN-M3.md | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/DEBIAN-M3.md b/DEBIAN-M3.md
+index ab204c6..c138872 100644
+--- a/DEBIAN-M3.md
++++ b/DEBIAN-M3.md
+@@ -20,3 +20,8 @@ Postcard pide Python 3.14+ (`IMAP4.idle()` para vigilar la bandeja) y Debian 13
+ `uv python install 3.15` → venv `/opt/gtk420/py315` → `pip install pygobject` (compila PyGObject 3.58 contra
+ `libgirepository-2.0-dev` de Debian en segundos) → `exec /opt/gtk420/py315/bin/python3 /opt/gtk420/bin/postcard`.
+ El paquete puro instalado por meson en `/opt/gtk420/lib/python3/dist-packages` sirve con cualquier Python.
++
++## Debian 14 (27-oct-2026)
++Con Debian 14 (GTK 4.24, libadwaita 1.10, Python 3.14) ya no hace falta ni el prefijo /opt/gtk420 ni el Python 3.15:
++`meson setup build --prefix=/usr/local -Dbindir=libexec/postcard && ninja -C build && sudo ninja -C build install`.
++El paquete va a /usr/local/lib/python3/dist-packages (fuera de sys.path): el lanzador exporta PYTHONPATH.
