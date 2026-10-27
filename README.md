@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="logo/waybian-logo-oscuro.png" alt="WayBian" width="520">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo/waybian-logo-oscuro.png">
+    <source media="(prefers-color-scheme: light)" srcset="logo/waybian-logo-claro.png">
+    <img src="logo/waybian-logo-oscuro.png" alt="WayBian" width="520">
+  </picture>
 </p>
 
 # WayBian
