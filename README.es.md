@@ -88,7 +88,7 @@ Hyprland 0.55 sobre Wayland, con una forma de trabajar que conserva las costumbr
 - **Inicio de sesión**: greetd con un greeter de Hyprland mínimo (fondo + terminal translúcida), dibujado por CPU para que funcione aunque falle la GPU, con caída a la consola si lo gráfico no aparece en 40 s.
 - **GTK4 en todo**: Nautilus con portal de ficheros GTK4, Chrome con su backend GTK4, fuzzel, satty y **Postcard** como cliente de correo (compilado contra GTK 4.20 + libadwaita 1.8 en un prefijo propio, corriendo en Python 3.15).
 
-Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md).
+Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El inventario completo de software (qué viene empaquetado, qué compilamos nosotros, qué dibuja con la GPU y por qué GTK4): [docs/software.md](docs/software.md).
 
 <p align="center">
   <img src="images/desktop.jpg" alt="Escritorio de WayBian" width="800"><br>

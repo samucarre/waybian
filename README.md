@@ -88,7 +88,7 @@ Hyprland 0.55 on Wayland, with a workflow that keeps the habits of macOS:
 - **Login**: greetd with a minimal Hyprland greeter (wallpaper + translucent terminal), drawn by CPU so it works even without the GPU, falling back to the console if the graphics do not come up in 40 s.
 - **GTK4 everywhere**: Nautilus with a GTK4 file portal, Chrome with its GTK4 backend, fuzzel, satty, and **Postcard** as the mail client (built against GTK 4.20 + libadwaita 1.8 in a private prefix, running on Python 3.15).
 
-More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md).
+More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). The full software inventory (what is packaged, what we build ourselves, what draws with the GPU and why GTK4): [docs/software.md](docs/software.md).
 
 <p align="center">
   <img src="images/desktop.jpg" alt="WayBian desktop" width="800"><br>
