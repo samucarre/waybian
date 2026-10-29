@@ -12,6 +12,8 @@ The scripts themselves live in the private lab repository (`waybian-lab`); this 
 | Image | `03-imagen.sh` | Packs the root as `debian-m3-root.img.zst` (12 GiB ext4 that grows on first boot) and a GRUB `BOOTAA64.EFI` that looks for the root by UUID. |
 | Deploy | `04-desplegar-mac.sh` | From macOS: creates the Linux partition in the free space left by the Asahi installer, writes the image to the raw device, verifies it by reading it back, copies GRUB to the ESP and refuses to touch `m1n1/boot.bin` or `vendorfw/`. |
 
+The base scripts still produce Debian 13 "trixie": after the first boot the system is upgraded in place to Debian 14 "forky", the way the live machine was ([software.md](software.md#debian-14)).
+
 The image was tested before touching the Mac in QEMU with HVF, booting the same way (UEFI firmware → `BOOTAA64.EFI` → GRUB → kernel, `ramfb` → `simple-framebuffer`), which is also how the native partition can be booted from macOS as a VM for repairs.
 
 ## Everything after the first boot

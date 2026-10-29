@@ -4,7 +4,7 @@ Issues and Discussions are open to anyone invited to this repository. English an
 
 **Useful to us**
 
-- Anything you know about `t6031` / G15 / the M3 generation that we got wrong or could do better: suspend, USB4/Thunderbolt, DisplayPort over USB‑C, HDMI above 60 Hz, power management.
+- Anything you know about `t6031` / G15 / the M3 generation that we got wrong or could do better: suspend, USB4/Thunderbolt, DisplayPort over USB‑C, HDMI above 60 Hz, GPU preemption (a long compute job versus the desktop), power management.
 - Experience with the same board (MacBook Pro 16" M3 Max, `j516c`) or close ones (`j514`, `j516s`).
 - Improvements to the forks: open the pull request on the fork (see [docs/forks.md](docs/forks.md)) and mention it here.
 

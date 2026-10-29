@@ -1,6 +1,6 @@
 # Hardware, component by component
 
-State on 27 Oct 2026 with kernel `7.2.11-waybian-0.2`. "Fix" means something that had to be done on top of Debian 14 and the upstream kernel to make it work on this board (`j516c`).
+State on 29 Oct 2026 with kernel `7.2.11-waybian-0.4`. "Fix" means something that had to be done on top of Debian 14 and the upstream kernel to make it work on this board (`j516c`).
 
 ## Display
 
@@ -11,13 +11,13 @@ State on 27 Oct 2026 with kernel `7.2.11-waybian-0.2`. "Fix" means something tha
 
 ## External display (HDMI)
 
-- The HDMI port is a second DRM card (`apple-drm-ext`) **without a render node**. Hyprland's backend (`aquamarine`) refused it; the fork `samucarre/aquamarine` (`hdmi-apple-drm-ext`) adds a GBM renderer path for a card like that, and Hyprland is started with `AQ_DRM_DEVICES` listing both cards.
+- The HDMI port is a second DRM card (`apple-drm-ext`) **without a render node**. Hyprland's backend (`aquamarine`) refused it; the fork `samucarre/aquamarine` (`hdmi-apple-drm-ext-0.15`, on aquamarine 0.15.1) adds a GBM renderer path for a card like that, and Hyprland is started with `AQ_DRM_DEVICES` listing both cards.
 - Works at 3440×1440 @ 60 Hz on an ultrawide; 100 Hz is still pending. Audio follows the cursor's monitor.
 - DisplayPort over USB‑C: investigated, not working (needs the type‑C/USB4 side, device tree and boot-loader work).
 
 ## GPU
 
-See [kernel-gpu.md](kernel-gpu.md). Summary: Apple M3 Max G15C, 40 cores in 4 clusters, Aurora Silicon driver and Mesa, OpenGL 4.6.
+See [kernel-gpu.md](kernel-gpu.md). Summary: Apple M3 Max G15C, 40 cores in 4 clusters, Aurora Silicon driver and Mesa, OpenGL 4.6 and Vulkan 1.4 (Mesa's Honeykrisp).
 
 ## Video decode (AVD)
 
@@ -39,8 +39,8 @@ See [kernel-gpu.md](kernel-gpu.md). Summary: Apple M3 Max G15C, 40 cores in 4 cl
 
 ## Sound
 
-- Speakers: the J516 (16" M3) has the same amplifier/codec set as the J416 (16" M2): `cs42l84` + six `sn012776`. Asahi's `asahi-audio` 3.3 and `alsa-ucm-conf-asahi` do not know the J516 yet, so the J416 UCM profiles and the WirePlumber filter chain (`graph-j416.json`) are installed under the J516 name. Result: the "MacBook Pro Speakers" sink with Asahi's convolver DSP.
-- `speakersafetyd` (Debian 1.1.2) has no `j516` profile; a symlink `j516.conf → j316.conf` mirrors the upstream commit that added the M3 generation. Without `speakersafetyd` the kernel keeps the amplifiers limited to −20 dB, so the speakers cannot be damaged, they only sound low.
+- Speakers: the J516 (16" M3) has the same amplifier/codec set as the J416 (16" M2): `cs42l84` + six `sn012776`. On Debian 13, `asahi-audio` 3.3 and `alsa-ucm-conf-asahi` did not know the J516, so the J416 UCM profiles and WirePlumber filter chain (`graph-j416.json`) were set up for it. Debian 14's `asahi-audio` 5.0 ships J516 graphs of its own (speakers and microphone); the local WirePlumber rule from Debian 13 is still installed next to them, and the local UCM profile is kept with `dpkg-divert` because `alsa-ucm-conf-asahi` 10's J516 profile points to the generic laptop one, without the headphone cap. Result: the "MacBook Pro Speakers" sink with Asahi's convolver DSP.
+- `speakersafetyd` 3.0 (Debian 14) ships a `j516` profile; on Debian 13 (1.1.2) a symlink `j516.conf → j316.conf` mirrored the upstream commit that added the M3 generation. Without `speakersafetyd` the kernel keeps the amplifiers limited to −20 dB, so the speakers cannot be damaged, they only sound low.
 - Headphone jack: the `cs42l84` "Jack DAC Playback Volume" reaches +12 dB and nothing limits it on Linux. A local UCM profile fixes the DAC at −12 dB and leaves volume to PipeWire in software.
 - Microphones: beamforming profile from the J416; the ALSA node name differs on this kernel (`platform-audio` instead of `platform-snd_soc_apple_aop`), so the filter file was adjusted.
 - A gotcha: the login greeter's own PipeWire grabbed the sound card before the user session started, leaving the session with a "Dummy Output". PipeWire is masked for the greeter user.
@@ -63,11 +63,12 @@ See [kernel-gpu.md](kernel-gpu.md). Summary: Apple M3 Max G15C, 40 cores in 4 cl
 
 - Apple NVMe (`nvme-apple`, ANS2) in Asahi's tree only (mainline 7.3 has the device tree but not the controller node).
 - The macOS data volume cannot be read from Linux: APFS with hardware encryption (keys in the Secure Enclave). The ESP has 4 KiB sectors and macOS does not mount it either; copying `boot.bin` from macOS is done with `dd` on the raw device.
-- Linux root was enlarged from 48 to 122.5 GiB after the install by shrinking macOS from macOS and moving the partition, without reinstalling.
+- Linux root was enlarged from 48 to 122.5 GiB after the install by shrinking macOS from macOS and moving the partition, without reinstalling. On 28 Oct 2026 it grew to 401.9 GiB (macOS keeps 521.5 GiB): the system was copied into a new partition in the space freed from macOS (first used as `/home`), which took over the root's filesystem UUID, so GRUB and the root line of `fstab` did not change (the `/home` line went away); then the stub container and the ESP were copied to the end of the old root, keeping their PARTUUIDs (m1n1 finds the ESP by PARTUUID), the partition table was rewritten so the new root runs up to them, and `resize2fs` grew it on the next boot.
 
 ## Power
 
-- Battery and charging report correctly; package power is read from the SMC for the bar's power widget.
+- Battery and charging report correctly; package power is read from the SMC for the bar's power widget. The time left is the SMC's own estimate (`time_to_empty_now` / `time_to_full_now`); the SMC reports battery current and power with a sign (negative when discharging), so a calculation from the current has to use its absolute value.
+- Fans: with the chip at 99–107 °C during a long GPU compute job, the SMC keeps them at about 65 % (3,500 and 3,700 rpm). `macsmc_hwmon` with `fan_control=1` lets Linux set them: a small service sets 80 % from 80 °C and the maximum from 88 °C, gives control back to the SMC below 72 °C, and ignores sensors that stop changing (the GPU's keep their last value while the GPU is off).
 - Short press of the power key is "power off" by default in logind; the Touch ID key sits next to Backspace, so a long press only is advisable (`HandlePowerKey=ignore`).
 
 ## Not working

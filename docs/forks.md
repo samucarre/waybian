@@ -4,25 +4,24 @@ Everything that needed a change is kept as a fork with a branch, under github.co
 
 | Program | Fork and branch | What changed | Installed as |
 |---|---|---|---|
-| Waybar | [samucarre/Waybar](https://github.com/samucarre/Waybar) `gtk4-debian13-m3` (on upstream PR Alexays/Waybar#5366) | GTK4 port plus: three fixes to build on Debian 13, a segfault in `hyprland/workspaces`, module menus, not dying when a monitor is removed or added, `align` for custom modules. `DEBIAN-M3.md` in the fork has the build recipe. | `/usr/local/bin/waybar` (remove it to return to Debian's) |
+| Waybar | [samucarre/Waybar](https://github.com/samucarre/Waybar) `gtk4-debian13-m3` (on upstream PR Alexays/Waybar#5366) | GTK4 port plus: three fixes to build on Debian 13, a segfault in `hyprland/workspaces`, module menus, not dying when a monitor is removed or added, `align` for custom modules, clicks on a module's label or icon, tooltips that closed on every refresh, workspace clicks with Hyprland 0.55 and with a Lua configuration. `DEBIAN-M3.md` in the fork has the build recipe. | `/usr/local/bin/waybar` (remove it to return to Debian's) |
 | aquamarine | [samucarre/aquamarine](https://github.com/samucarre/aquamarine) `hdmi-apple-drm-ext-0.15` (v0.15.1; `hdmi-apple-drm-ext` on v0.11.0 was the Debian 13 one) | GBM renderer for a DRM card without a render node, which is what the M3's HDMI (`apple-drm-ext`) is. Applied cleanly on 0.15.1 for Hyprland 0.56. | `/usr/local/lib/aarch64-linux-gnu/libaquamarine.so.14` |
 | omdrop-awdl (AirDrop) | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | Faster discoverable on/off from the bar. | `/usr/lib/omdrop/` |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | Mirror, no changes: VA‑API driver for the AVD. | `/usr/lib/aarch64-linux-gnu/dri/v4l2_request_drv_video.so` |
 | xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` (on upstream `2372e15`) | Quick Look in the open dialogs, like the Finder: space opens the selected file in its own window, the arrows move through the files, space or Esc closes it and Enter then opens the file that was on screen. New module `src/gui/quick_look.rs` (Rust), with unit tests for its image-header reader. | `/usr/libexec/xdg-desktop-portal-gtk4` |
-| Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GOA); a minimal MCP server over its database; "Group Conversations" switch; IMAP IDLE for Python < 3.14; prune with `UID SEARCH UID 1:*` instead of `ALL` (iCloud); WebKit sandbox exposure of a non-system GL driver; `DEBIAN-M3.md` with the GTK 4.20 + libadwaita 1.8 + Python 3.15 recipe. | `/opt/gtk420` + `/usr/local/bin/postcard` |
-| Kernel | private fork of `omacom/linux-aurora` `integration/aurora` | Local patches (panel brightness on J516C, HDMI, small fixes), configs, build/install/update scripts. | `/boot/aurora/`, GRUB entries 2–4 |
-| GTK 4.20.4 + libadwaita 1.8.8 | upstream tarballs | No changes; built into `/opt/gtk420` for Postcard only. | `/opt/gtk420` |
+| Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GOA); a minimal MCP server over its database; "Group Conversations" switch; IMAP IDLE for Python < 3.14; prune with `UID SEARCH UID 1:*` instead of `ALL` (iCloud); WebKit sandbox exposure of a non-system GL driver; `DEBIAN-M3.md` with the GTK 4.20 + libadwaita 1.8 + Python 3.15 recipe for Debian 13 and the note that on Debian 14 the system GTK and Python are enough. | `/usr/local/libexec/postcard` + `/usr/local/bin/postcard` (meson, against the system) |
+| Kernel | private fork of `omacom/linux-aurora` `integration/aurora` | Local patches (panel brightness on J516C, HDMI, small fixes), configs, build/install/update scripts. | `/boot/aurora/`, one GRUB entry per kernel, by id (`waybian-0.4` is the default) |
 | Mesa (Aurora) | Aurora's Mesa | Small Wayland/EGL patch; installed outside the system Mesa, selected by an EGL vendor file. | `~/m3gpu/mesa-aurora` |
 | AVD firmware | [aurora-silicon/avd-fw](https://github.com/aurora-silicon/avd-fw) | No changes; built with Debian's LLVM, SHA‑256 pinned. | `/lib/firmware/<kernel>/apple/avd-fw-v4-t0.bin` |
 
-Installed from upstream unchanged: `satty` (release binary), `fuzzel` and everything else from Debian 13 (some from `trixie-backports`, such as Hyprland 0.55).
+Installed from upstream unchanged: `satty` (release binary), `fuzzel` and everything else from Debian 14 (Hyprland 0.56.2 among them).
 
 ## Our commits, as patches
-Each fork is mounted as a git submodule under `forks/` (pinned to the exact commit in use on the machine) and every commit of ours is also here as a plain patch file, readable on GitHub. Apply with `git am` on top of the base named for each fork. The kernel fork stays private.
+Each fork is mounted as a git submodule under `forks/` (pinned to the exact commit in use on the machine) and every code commit of ours is also here as a plain patch file, readable on GitHub. Apply with `git am` on top of the base named for each fork. The kernel fork stays private.
 
 ### Waybar: GTK4 port + fixes for Debian 13 / M3
 
-Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m3), branch `gtk4-debian13-m3`, pinned at `cef6e68` as `forks/Waybar`. Base: upstream PR Alexays/Waybar#5366 (GTK4 port).
+Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m3), branch `gtk4-debian13-m3`, pinned at `a1343a4` as `forks/Waybar`. Base: upstream PR Alexays/Waybar#5366 (GTK4 port).
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
@@ -39,11 +38,12 @@ Fork [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m
 | 11 | 2026-10-27 | [AIconLabel: bind the event controllers to the box, not the label](https://github.com/samucarre/Waybar/commit/fff9bf3ecc16de7db5fa4d20e283bd68f2bdb3d6) | [0011-AIconLabel-bind-the-event-controllers-to-the-box-not-the-lab.patch](../patches/Waybar/0011-AIconLabel-bind-the-event-controllers-to-the-box-not-the-lab.patch) |
 | 12 | 2026-10-27 | [ALabel: serve the tooltip through query-tooltip on the module widget](https://github.com/samucarre/Waybar/commit/f2007d2c748c1bfdfacbdc5488b188136a366976) | [0012-ALabel-serve-the-tooltip-through-query-tooltip-on-the-module.patch](../patches/Waybar/0012-ALabel-serve-the-tooltip-through-query-tooltip-on-the-module.patch) |
 | 13 | 2026-10-27 | [hyprland/backend: try the legacy dispatch before the Lua protocol](https://github.com/samucarre/Waybar/commit/cef6e68d9b17050f3b99086c547a9187bdbe67bd) | [0013-hyprland-backend-try-the-legacy-dispatch-before-the-Lua-prot.patch](../patches/Waybar/0013-hyprland-backend-try-the-legacy-dispatch-before-the-Lua-prot.patch) |
+| 14 | 2026-10-27 | [hyprland/backend: treat a Lua parse error reply as a rejected legacy dispatch](https://github.com/samucarre/Waybar/commit/a1343a481778550793d31daa338f99650095833c) | [0014-hyprland-backend-treat-a-Lua-parse-error-reply-as-a-rejected.patch](../patches/Waybar/0014-hyprland-backend-treat-a-Lua-parse-error-reply-as-a-rejected.patch) |
 
 
 ### aquamarine: GBM renderer for a DRM card without a render node (HDMI)
 
-Fork [samucarre/aquamarine](https://github.com/samucarre/aquamarine/tree/hdmi-apple-drm-ext-0.15), branch `hdmi-apple-drm-ext-0.15`, pinned at `888d536` as `forks/aquamarine`. Base: hyprwm/aquamarine v0.15.1 (Debian 14); the branch `hdmi-apple-drm-ext` on v0.11.0 was the Debian 13 one.
+Fork [samucarre/aquamarine](https://github.com/samucarre/aquamarine/tree/hdmi-apple-drm-ext-0.15), branch `hdmi-apple-drm-ext-0.15`, pinned at `888d536` as `forks/aquamarine`. Base: hyprwm/aquamarine v0.15.1 (Debian 14); the branch `hdmi-apple-drm-ext` on v0.11.0 was the Debian 13 one. On v0.15.1 apply only patch 2; patch 1 is the same change on v0.11.0.
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
@@ -83,7 +83,7 @@ No commits of ours: a mirror.
 
 ### xdg-desktop-portal-gtk4: Quick Look in the GTK4 file dialogs
 
-Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `763190a` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
+Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `65bca80` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
@@ -93,4 +93,4 @@ Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-deskto
 | 4 | 2026-10-29 | [FileChooser: Quick Look window of a fixed size](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/5c894800139e6c427e7b0ac03267e9d83d5edf3d) | [0004-FileChooser-Quick-Look-window-of-a-fixed-size.patch](../patches/xdg-desktop-portal-gtk4/0004-FileChooser-Quick-Look-window-of-a-fixed-size.patch) |
 | 5 | 2026-10-29 | [FileChooser: Quick Look fixes after a review](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/68d7a420a29e912884f14a86f502e2efec87cb43) | [0005-FileChooser-Quick-Look-fixes-after-a-review.patch](../patches/xdg-desktop-portal-gtk4/0005-FileChooser-Quick-Look-fixes-after-a-review.patch) |
 
-Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a review found (a crash with an empty file list, a leak when the dialog closed with the preview open, the list's cursor left behind by the arrows, the selection lost with several files, huge images). The last commit of the branch, [763190a](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/763190a60d33ecac13c61e9753268af75a7d809e), only adds a README section with screenshots; it is not kept as a patch because it carries images.
+Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a review found (a crash with an empty file list, a leak when the dialog closed with the preview open, the list's cursor left behind by the arrows, the selection lost with several files, huge images). The last two commits of the branch, [763190a](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/763190a60d33ecac13c61e9753268af75a7d809e) and [65bca80](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/65bca805e948fba95f81ab781b0945dd58ab329a), only touch the README (a section with screenshots); they are not kept as patches because they carry images.

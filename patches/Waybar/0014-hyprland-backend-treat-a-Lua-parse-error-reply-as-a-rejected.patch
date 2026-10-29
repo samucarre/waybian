@@ -1,0 +1,36 @@
+From a1343a481778550793d31daa338f99650095833c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 27 Oct 2026 17:00:58 +0100
+Subject: [PATCH] hyprland/backend: treat a Lua parse error reply as a rejected
+ legacy dispatch
+
+Hyprland 0.56 with a Lua config answers 'dispatch workspace 2' with
+'error: [string "return hl.dispatch(workspace 2)"]...' instead of
+'Invalid dispatcher', so the legacy-first probe cached the legacy
+form as working and workspace clicks did nothing.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ src/modules/hyprland/backend.cpp | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/modules/hyprland/backend.cpp b/src/modules/hyprland/backend.cpp
+index 3beca9bab..7c3a02734 100644
+--- a/src/modules/hyprland/backend.cpp
++++ b/src/modules/hyprland/backend.cpp
+@@ -391,9 +391,14 @@ std::string IPC::dispatch(const std::string& dispatcher, const std::string& arg)
+   // only when it is rejected. The reply is cached so each click costs one round trip.
+   if (!s_legacyDispatchWorks_.has_value() || *s_legacyDispatchWorks_) {
+     const std::string reply = getSocket1Reply(cmd);
++    // Hyprland 0.56 with a Lua config answers the legacy form with a Lua parse error
++    // ('error: [string "return hl.dispatch(workspace 2)"]:1: ...'), not "Invalid dispatcher",
++    // so any reply that starts with "error" counts as a rejection too.
+     const bool rejected = reply.find("Invalid dispatcher") != std::string::npos ||
+                           reply.find("invalid dispatcher") != std::string::npos ||
+-                          reply.find("unknown dispatcher") != std::string::npos;
++                          reply.find("unknown dispatcher") != std::string::npos ||
++                          reply.find("hl.dispatch") != std::string::npos ||
++                          reply.rfind("error", 0) == 0;
+     if (!rejected) {
+       if (!s_legacyDispatchWorks_.has_value()) {
+         spdlog::info("Hyprland IPC: legacy dispatch accepted, using it instead of Lua");

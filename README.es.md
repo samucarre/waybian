@@ -18,7 +18,7 @@ Este repositorio es la **presentación** del proyecto: qué es, cómo funciona, 
 
 El registro del día a día (cada cambio con su porqué, el espejo de todos los ficheros de configuración, los parches y los scripts que reconstruyen el sistema desde cero) está en otro repositorio privado, `waybian-lab`. Pide lo que necesites de él.
 
-> **Estado (27-oct-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.2`. Hay aristas.
+> **Estado (29-oct-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.4`. Hay aristas.
 
 ## La máquina
 
@@ -27,7 +27,7 @@ El registro del día a día (cada cambio con su porqué, el espejo de todos los 
 | Modelo | MacBook Pro 16" (2023), `Mac15,9` |
 | SoC | Apple M3 Max `t6031`: CPU de 16 núcleos (12P + 4E), GPU de 40 núcleos (G15C), 64 GB |
 | Identificador de placa | `j516c` (`t6031-j516c.dts` en el kernel) |
-| Disco | SSD de 1 TB: macOS 27 en ~800 GiB, raíz de Linux de 122,5 GiB (ext4), los dos en el mismo disco |
+| Disco | SSD de 1 TB: macOS 27 en 521,5 GiB, raíz de Linux de 401,9 GiB (ext4), los dos en el mismo disco |
 | Debian | 14 «forky» (testing), subido desde 13 «trixie» el 27-oct-2026 |
 | Tamaño de página | 16 KiB (lo exigen las IOMMU de Apple; algún binario da por hecho 4 KiB) |
 
@@ -37,7 +37,7 @@ El registro del día a día (cada cambio con su porqué, el espejo de todos los 
 |---|---|---|
 | Arranque dual con macOS | ✅ | Encender → Debian; mantener el botón → macOS. macOS intacto (su propio contenedor APFS, Full Security). |
 | CPU, NVMe, memoria | ✅ | Páginas de 16 KiB. |
-| **GPU** (G15C, 40 núcleos) | ✅ | Driver y Mesa de Aurora Silicon. OpenGL 4.6; el compositor gasta ~2 % de CPU. |
+| **GPU** (G15C, 40 núcleos) | ✅ | Driver y Mesa de Aurora Silicon. OpenGL 4.6 y Vulkan 1.4; el compositor gasta ~2 % de CPU. |
 | Pantalla interna 3456×2234 | ✅ | Escala 2 en Hyprland. **Brillo** funciona (parche local del kernel para esta placa). |
 | Teclado y su retroiluminación | ✅ | El teclado del M3 no tiene teclas para la luz: la lleva un botón de la barra. |
 | Trackpad | ✅ | Gestos de tres dedos para cambiar de escritorio. |
@@ -47,7 +47,7 @@ El registro del día a día (cada cambio con su porqué, el espejo de todos los 
 | Jack de auriculares | ✅ | Salida limitada a −12 dB (el DAC llega a +12 dB si no). |
 | Micrófonos | ✅ | Perfil con beamforming. |
 | Cámara | ✅ | `apple-isp`. |
-| Batería y carga | ✅ | |
+| Batería y carga | ✅ | El tiempo restante sale de la estimación del propio SMC. |
 | Puertos USB‑C (USB 3) | ✅ | Los tres, con `deferred_probe_timeout=10` (los controladores type‑C esperan a un driver USB4 que aún no existe). |
 | **Salida HDMI** | ✅ | Monitor ultrapanorámico a 3440×1440 y 60 Hz, con un `aquamarine` parcheado. 100 Hz pendiente. |
 | Decodificación de vídeo por hardware (AVD) | ✅ | H.264 / HEVC / VP9 / AV1 por VA‑API (`libva-v4l2-request`): Chrome, mpv, GStreamer. Unos 5 W menos en una página de vídeo. |
@@ -74,26 +74,27 @@ El instalador de Asahi se usa en su modo **«UEFI environment only»**: encoge m
 
 ## Kernel y GPU
 
-- **Kernel «WayBian 0.2»**: la rama `integration/aurora` de Aurora Silicon (Linux 7.2.11, estado del 26-oct-2026) más unos pocos parches locales (brillo del panel en esta placa, HDMI externo por la tarjeta `apple-drm-ext` y algún arreglo), páginas de 16 KiB, compilado en local. GRUB conserva el 7.1.13 de Asahi como entrada de emergencia y los kernels anteriores de reserva; un kernel nuevo se prueba siempre una vez con `grub-reboot` antes de ser el predeterminado.
-- **GPU**: el M3 estrena generación de GPU (G15) y Asahi aún no la maneja. Antes de adoptar el driver de Aurora, el autor portó a la G15C un driver experimental de otra variante del M3 hasta tener cálculo estable (33 rondas de depuración en un día); las lecciones están en [docs/kernel-gpu.md](docs/kernel-gpu.md). Hoy: «Apple M3 Max (G15C)», 40 núcleos en 4 grupos, OpenGL 4.6, Hyprland con aceleración de verdad.
+- **Kernel «WayBian 0.4»**: la rama `integration/aurora` de Aurora Silicon (Linux 7.2.11, estado del 28-oct-2026) más unos pocos parches locales (brillo del panel en esta placa, HDMI externo por la tarjeta `apple-drm-ext` y algún arreglo), páginas de 16 KiB, con BTF y sin SELinux, compilado en local. GRUB conserva el 7.1.13 de Asahi como entrada de emergencia y los kernels anteriores de reserva; un kernel nuevo se prueba una vez con `grub-reboot` antes de ser el predeterminado (la 0.3 fue la excepción: GRUB ignoraba `next_entry` hasta que se rehízo su imagen).
+- **GPU**: el M3 estrena generación de GPU (G15) y Asahi aún no la maneja. Antes de adoptar el driver de Aurora, el autor portó a la G15C un driver experimental de otra variante del M3 hasta tener cálculo estable (33 rondas de depuración en un día); las lecciones están en [docs/kernel-gpu.md](docs/kernel-gpu.md). Hoy: «Apple M3 Max (G15C B2)», 40 núcleos en 4 grupos, OpenGL 4.6 y Vulkan 1.4, Hyprland con aceleración de verdad.
 - **Vídeo**: el firmware del AVD es software libre (`aurora-silicon/avd-fw`), compilado en local e instalado por versión de kernel.
 
 ## Escritorio
 
 Hyprland 0.56 sobre Wayland, con una forma de trabajar que conserva las costumbres de macOS:
 
-- **Waybar portada a GTK4** (nuestro fork de la PR de upstream), con botones hechos a mano: un «puesto de trabajo» en un clic, un panel de recientes con arrastrar y soltar, contadores de mensajería (Discord, Telegram, WhatsApp, correo), escritorios remotos por grupos, un panel de Wi‑Fi que reintenta, una chuleta de atajos, ventiladores/temperaturas/consumo, luz del teclado, Tailscale, AirDrop y un pequeño reproductor de música (cliente Subsonic/Navidrome que suena por mpv).
-- **Atajos de Mac**: ⌘C/⌘V/⌘X en todas partes (en la terminal se traducen a Ctrl+Shift, porque allí Ctrl+C interrumpe), ⌘F, ⌘W, ⌘T, ⌘⏎, ⌘+/⌘−, Ctrl+⌘F para pantalla completa; capturas ⌘⇧3/4/5 con la miniatura flotante; gestos de tres dedos.
+- **Waybar portada a GTK4** (nuestro fork de la PR de upstream), con botones hechos a mano: un «puesto de trabajo» en un clic, un panel de recientes con arrastrar y soltar, contadores de mensajería (Discord, Telegram, WhatsApp, correo), escritorios remotos por grupos, un panel de Wi‑Fi que reintenta, una chuleta de atajos, ventiladores/temperaturas/consumo, luz del teclado, Tailscale, AirDrop y un pequeño reproductor de música (cliente Subsonic/Navidrome que suena por mpv; el botón de la barra marca de dónde sale el audio, el reproductor o una web en Chrome).
+- **Atajos de Mac**: ⌘C/⌘V/⌘X en todas partes (en la terminal se traducen a Ctrl+Shift, porque allí Ctrl+C interrumpe; ⌘C/⌘X confirman lo copiado con un aviso), ⌘F, ⌘W, ⌘T, ⌘⏎, ⌘+/⌘−, Ctrl+⌘F para pantalla completa; capturas ⌘⇧3/4/5 con la miniatura flotante; gestos de tres dedos.
 - **Luz nocturna** como shader de Hyprland según la puesta de sol local (el driver de pantalla aún no expone matriz de color), que se quita de las capturas después.
-- **AirDrop** desde y hacia un iPhone, con una tarjeta que se puede arrastrar desde que llega el fichero.
+- **AirDrop** desde y hacia un iPhone, con una tarjeta que se puede arrastrar desde que llega el fichero; las fotos se enderezan al llegar.
 - **Inicio de sesión**: greetd con un greeter de Hyprland mínimo (fondo + terminal translúcida), dibujado por CPU para que funcione aunque falle la GPU, con caída a la consola si lo gráfico no aparece en 40 s.
-- **GTK4 en todo**: Nautilus, diálogos de ficheros con un portal GTK4 compilado de nuestro fork con **vista rápida** (Espacio sobre un fichero, como en el Finder) y miniaturas que siempre están, Chrome con su backend GTK4, fuzzel, satty y **Postcard** como cliente de correo (compilado contra GTK 4.20 + libadwaita 1.8 en un prefijo propio, corriendo en Python 3.15).
+- **Configuración en Lua**: Hyprland 0.56 avisa de que la 0.57 quita el formato `.conf`, así que la configuración ya es Lua; un pequeño envoltorio de `hyprctl` traduce más de 60 dispatchers del formato antiguo y cualquier keyword de configuración, y los scripts, la barra y el demonio de inactividad siguen funcionando.
+- **GTK4 en todo**: Nautilus, diálogos de ficheros con un portal GTK4 compilado de nuestro fork con **vista rápida** (Espacio sobre un fichero, como en el Finder) y miniaturas hechas de antemano, Chrome con su backend GTK4, fuzzel, satty y **Postcard** como cliente de correo (compilado de nuestro fork contra el GTK 4.24 y la libadwaita 1.10 de Debian 14, con el Python 3.14 del sistema).
 
 Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El inventario completo de software (qué viene empaquetado, qué compilamos nosotros, qué dibuja con la GPU y por qué GTK4): [docs/software.md](docs/software.md).
 
 <p align="center">
   <img src="images/desktop.jpg" alt="Escritorio de WayBian" width="800"><br>
-  <sub>El escritorio, con el panel de información del sistema.</sub>
+  <sub>El escritorio el 24-oct-2026, aún en Debian 13, con el panel de información del sistema.</sub>
 </p>
 <p align="center">
   <img src="images/waybar-panels.jpg" alt="Waybar y sus paneles" width="800"><br>
@@ -122,11 +123,11 @@ La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la
 | Waybar (port a GTK4) | barra y botones | GTK4 (Vulkan) | **compilada de nuestro fork** |
 | fuzzel · mako · swaybg | lanzador · avisos · fondo | Wayland nativo | Debian 14 |
 | kitty 0.48 | terminal | OpenGL | Debian 14 |
-| greetd + tuigreet + greeter propio | inicio de sesión | CPU a propósito | backports + nuestro |
-| hyprlock · hypridle · hyprpicker · hyprpolkitagent | bloqueo, inactividad, cuentagotas, polkit | OpenGL / Wayland | backports |
+| greetd + tuigreet + greeter propio | inicio de sesión | CPU a propósito | Debian 14 + nuestro |
+| hyprlock · hypridle · hyprpicker · hyprpolkitagent | bloqueo, inactividad, cuentagotas, polkit | OpenGL / Wayland | Debian 14 |
 | grim · slurp · satty | capturas y anotación | satty: GTK4 | Debian 14 · satty binario upstream |
 | xdg-desktop-portal-hyprland · portal-gtk4 | portales, diálogos de ficheros con vista rápida | GTK4 (Rust) | Debian 14 · **compilado de nuestro fork** |
-| Nautilus 51 · Loupe 51 · sushi 50 | ficheros, imágenes, vista previa | GTK4 + libadwaita | Debian 14 |
+| Nautilus 51 · Loupe 51 · sushi 50 | ficheros, imágenes, vista rápida | GTK4 + libadwaita | Debian 14 |
 | pavucontrol 6 | mezclador de audio | GTK4 | Debian 14 |
 | PipeWire · WirePlumber · asahi-audio · speakersafetyd | sonido | — | Debian 14 + Asahi |
 | NetworkManager + iwd | red | — | Debian 14 |
@@ -137,17 +138,17 @@ La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la
 | Programa | Dibuja con | Origen |
 |---|---|---|
 | Google Chrome | Chromium, diálogos GTK4 (`--gtk-version=4`), vídeo por hardware | repositorio del fabricante |
-| Postcard (correo) | GTK 4.20 + libadwaita 1.8 + WebKitGTK, Python 3.15 | **compilado de nuestro fork** |
+| Postcard (correo) | GTK 4.24 + libadwaita 1.10 + WebKitGTK, Python 3.14 | **compilado de nuestro fork** |
 | WordCraft · GridCraft · DeckCraft · PdfCraft · PhotoCraft | Rust (iced) sobre Vulkan | releases upstream |
 | LibreOffice | GTK3, solo sin ventana y oculto del menú: la herramienta con la que el asistente de IA (Claude Code) crea y convierte documentos de Office, porque los MCP de las Craft todavía no le sirven lo bastante; abre también los formatos antiguos .xls/.ppt/.odp | Debian 14 |
 | mpv 0.41 | OpenGL/Vulkan, `hwdec` | Debian 14 |
-| Telegram Desktop 5.7 | Qt 5 + Vulkan | backports |
+| Telegram Desktop 5.7 | Qt 5 + Vulkan | Debian 14 |
 | WhatsApp | ventana de app de Chrome | — |
 | Vesktop (Discord) · Claude Desktop | Electron (GTK3) | upstream |
 | Remmina 1.4 | GTK3 | Debian 14 |
 | Steam · Tailscale · Claude Code | — | upstream |
 
-**Compilado por nosotros, no de apt:** Waybar GTK4, aquamarine, libva-v4l2_request, GTK 4.20 + libadwaita 1.8 + Postcard, Python 3.15 + PyGObject, xdg-desktop-portal-gtk4, la Mesa de Aurora, el firmware del AVD y el kernel. Todavía sin GTK4: las apps Electron (Electron ignora la opción), LibreOffice (su backend GTK4 casca) y Remmina (sin port).
+**Compilado por nosotros, no de apt:** Waybar GTK4, aquamarine, libva-v4l2_request, Postcard, xdg-desktop-portal-gtk4, la Mesa de Aurora, el firmware del AVD y el kernel. Todavía sin GTK4: las apps Electron (Electron ignora la opción), LibreOffice (su backend GTK4 casca) y Remmina (sin port).
 
 ## Las piezas que se han cambiado
 
@@ -155,31 +156,32 @@ Cada programa que ha necesitado un cambio tiene un fork con su rama, para poder 
 
 | Programa | Fork / rama | Qué cambia |
 |---|---|---|
-| Waybar | [samucarre/Waybar](https://github.com/samucarre/Waybar) `gtk4-debian13-m3` | port a GTK4 (PR Alexays/Waybar#5366) + arreglos: un segfault en `hyprland/workspaces`, menús de los módulos, sobrevivir al quitar/poner un monitor, `align` en los módulos custom |
+| Waybar | [samucarre/Waybar](https://github.com/samucarre/Waybar) `gtk4-debian13-m3` | port a GTK4 (PR Alexays/Waybar#5366) + arreglos: un segfault en `hyprland/workspaces`, menús de los módulos, sobrevivir al quitar/poner un monitor, `align` en los módulos custom, clics en los escritorios con la configuración Lua de Hyprland |
 | aquamarine | [samucarre/aquamarine](https://github.com/samucarre/aquamarine) `hdmi-apple-drm-ext-0.15` | renderer GBM para una tarjeta DRM sin nodo de render (el HDMI del M3) |
 | omdrop-awdl | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | visible/invisible más rápido desde la barra |
-| Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | OAuth de Google con refresh token guardado (sin GNOME Online Accounts), IMAP IDLE en Python < 3.14, una rareza del `SEARCH ALL` de iCloud, interruptor «agrupar conversaciones», arreglo del sandbox de WebKit con un driver GL que no es Mesa, receta para Debian 13 |
+| Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | OAuth de Google con refresh token guardado (sin GNOME Online Accounts), IMAP IDLE en Python < 3.14, una rareza del `SEARCH ALL` de iCloud, interruptor «agrupar conversaciones», arreglo del sandbox de WebKit con un driver GL que no es Mesa, receta para Debian 13 (en Debian 14 bastan el GTK y el Python del sistema) |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | espejo (driver VA‑API del AVD) |
 | xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | vista rápida en los diálogos de abrir GTK4 (Espacio, como en el Finder) |
 | Kernel | fork privado del árbol de Aurora | parches locales, configuraciones y scripts de instalación; ver [docs/kernel-gpu.md](docs/kernel-gpu.md) |
 
-Los forks están montados como submódulos de git en [`forks/`](forks) (cada uno fijado al commit exacto que corre en la máquina), y cada commit nuestro se puede leer también como parche en [`patches/`](patches). Lista completa, bases y recetas: [docs/forks.md](docs/forks.md).
+Los forks están montados como submódulos de git en [`forks/`](forks) (cada uno fijado al commit exacto que corre en la máquina), y cada commit de código nuestro se puede leer también como parche en [`patches/`](patches). Lista completa, bases y recetas: [docs/forks.md](docs/forks.md).
 
 ## Cómo se hizo
 
-El kernel y el sistema de ficheros raíz se construyeron en una máquina virtual Linux arm64, se probaron en QEMU con el mismo camino UEFI → GRUB → kernel y se escribieron en el Mac desde macOS. Desde entonces cada cambio se hace en la máquina viva y queda anotado. Reproducir el sistema es ejecutar los scripts base una vez y después un script `aplicar` idempotente; ver [docs/reproduce.md](docs/reproduce.md). Todo se ha hecho con un asistente de programación con IA de copiloto (Claude Code): el autor decide qué y por qué; el asistente lee registros, escribe los scripts y prueba; cualquier cambio de kernel, arranque o GRUB se explica antes y siempre tiene camino de vuelta.
+El kernel y el sistema de ficheros raíz se construyeron en una máquina virtual Linux arm64, se probaron en QEMU con el mismo camino UEFI → GRUB → kernel y se escribieron en el Mac desde macOS. Desde entonces cada cambio se hace en la máquina viva y queda anotado. Reproducir el sistema es ejecutar los scripts base una vez y después un script `aplicar.sh` idempotente; ver [docs/reproduce.md](docs/reproduce.md). Todo se ha hecho con un asistente de programación con IA de copiloto (Claude Code): el autor decide qué y por qué; el asistente lee registros, escribe los scripts y prueba; cualquier cambio de kernel, arranque o GRUB se explica antes y siempre tiene camino de vuelta.
 
 ## Lo que falta y en lo que nos vendría bien ayuda
 
 - Suspensión, USB4/Thunderbolt y DisplayPort por USB‑C: aún no.
 - HDMI a 100 Hz (el monitor y el cable lo admiten; la ruta de pantalla negocia 60 Hz).
+- Preempción de la GPU: el driver G15 de Aurora aún no interrumpe el cálculo, así que mientras dura un cómputo largo de GPU el escritorio espera a que acabe cada envío y se congela.
 - Cualquier cosa del `t6031`/G15 que tengamos mal.
 
 Abre un [issue](../../issues) o una [discusión](../../discussions).
 
 ## Créditos
 
-[Asahi Linux](https://asahilinux.org) (m1n1, U‑Boot, el instalador, el trabajo de kernel, `asahi-audio`, `speakersafetyd`), [Aurora Silicon](https://github.com/aurora-silicon) (integración del kernel del M3, driver de GPU y Mesa), [Debian](https://www.debian.org), [Fedora Asahi Remix](https://fedora-asahi-remix.org) (configuración del kernel), [Hyprland](https://hyprland.org), [Waybar](https://github.com/Alexays/Waybar), [omdrop](https://github.com/omdrop), [Postcard](https://github.com/gxanshu/postcard) y toda la gente cuya ingeniería inversa hace posible Linux en Apple Silicon.
+[Asahi Linux](https://asahilinux.org) (m1n1, U‑Boot, el instalador, el trabajo de kernel, `asahi-audio`, `speakersafetyd`), [Aurora Silicon](https://github.com/aurora-silicon) (integración del kernel del M3, driver de GPU y Mesa), [Debian](https://www.debian.org), [Fedora Asahi Remix](https://fedora-asahi-remix.org) (configuración del kernel), [Hyprland](https://hyprland.org), [Waybar](https://github.com/Alexays/Waybar), [omdrop](https://github.com/netmojo-systems/omdrop-awdl), [Postcard](https://github.com/gxanshu/postcard) y toda la gente cuya ingeniería inversa hace posible Linux en Apple Silicon.
 
 ## Licencia
 
