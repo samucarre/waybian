@@ -1,4 +1,4 @@
-From 77af0e591ad48efd74d606d97b1257aa86adb45b Mon Sep 17 00:00:00 2001
+From 962b38c8b88f83c9281e6914207c0997b9e2389d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
 Date: Tue, 27 Oct 2026 12:06:22 +0100
 Subject: [PATCH] imap: IDLE on Python < 3.14, and prune with UID 1:* instead

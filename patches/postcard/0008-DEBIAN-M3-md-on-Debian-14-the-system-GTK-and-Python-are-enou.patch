@@ -1,4 +1,4 @@
-From 872df74bc4acb2963c578c9093674146f6bbfeed Mon Sep 17 00:00:00 2001
+From 3dc993ebcc51111f099cf56952c72401c6b66f9f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
 Date: Tue, 27 Oct 2026 15:35:24 +0100
 Subject: [PATCH] DEBIAN-M3.md: on Debian 14 the system GTK and Python are

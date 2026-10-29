@@ -1,4 +1,4 @@
-From ff9a1262d7e246242115936e68a3c3ee341cbbb0 Mon Sep 17 00:00:00 2001
+From f3349f0a9ba334ade373a0674a902759de028afd Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
 Date: Tue, 27 Oct 2026 12:20:24 +0100
 Subject: [PATCH] DEBIAN-M3.md: run Postcard on an official Python 3.15 build
