@@ -24,8 +24,8 @@ GTK3 cannot be removed from the system (47 packages depend on it, Chrome among t
 | hyprlock, hypridle, hyprpicker, hyprpolkitagent | lock, idle, picker, polkit | OpenGL / Wayland | backports | |
 | swaybg | wallpaper | Wayland native | Debian 14 | |
 | grim, slurp, satty 0.22 | screenshots and annotation | satty: GTK4 + libadwaita | Debian 14; satty: upstream binary | replaced swappy (GTK3) |
-| xdg-desktop-portal-hyprland + xdg-desktop-portal-gtk4 | portals (screen sharing, file dialogs) | GTK4 (Rust) | backports; **portal-gtk4 built from mirror** | the GTK3 portal stays only for what the GTK4 one does not cover |
-| Nautilus 51, Loupe 51, sushi 50 | files, images, Quick Look | GTK4 + libadwaita | Debian 14 | HEIC thumbnails via `heif-thumbnailer` |
+| xdg-desktop-portal-hyprland + xdg-desktop-portal-gtk4 | portals (screen sharing, file dialogs) | GTK4 (Rust) | Debian 14; **portal-gtk4 built from our fork** | Quick Look (space bar) in the open dialogs; the GTK3 portal stays only for what the GTK4 one does not cover |
+| Nautilus 51, Loupe 51, sushi 50 | files, images, Quick Look | GTK4 + libadwaita | Debian 14 | HEIC thumbnails via `heif-thumbnailer`; the thumbnails the file dialogs show come from a watcher of ours ([desktop.md](desktop.md#file-dialogs-thumbnails-and-quick-look)) |
 | pavucontrol 6 | audio mixer | GTK4 / gtkmm 4 | Debian 14 | |
 | PipeWire + WirePlumber, asahi-audio 3.3, speakersafetyd | sound | — | Debian 14 + Asahi packages | J516 profiles added by hand (see [hardware.md](hardware.md)) |
 | NetworkManager + iwd | network | — | Debian 14 | `nm-applet` (GTK3) out of the session; the bar has its own Wi‑Fi panel |
@@ -58,11 +58,11 @@ Kept in forks with a branch each (see [forks.md](forks.md)); rebuilt with one sc
 | libva-v4l2_request | mirror | `/usr/lib/aarch64-linux-gnu/dri/` |
 | GTK 4.20.4 + libadwaita 1.8.8 + Postcard | upstream tarballs + fork `debian13-m3` | `/opt/gtk420` (private prefix, Postcard only) |
 | Python 3.15.2 + PyGObject 3.58 | `uv python install`, pip | `~/.local/share/uv`, venv `/opt/gtk420/py315` |
-| xdg-desktop-portal-gtk4 | mirror (Rust) | `/usr/libexec/` |
+| xdg-desktop-portal-gtk4 | fork `waybian` (Rust): Quick Look | `/usr/libexec/` |
 | Mesa (Aurora) | Aurora's tree + Wayland patch | outside the system Mesa, chosen by an EGL vendor file |
 | AVD firmware | `aurora-silicon/avd-fw` | `/lib/firmware/<kernel>/apple/` |
 | Kernel | private fork of Aurora's tree | `/boot/aurora/`, GRUB |
-| Night-light shader, bar panels, session scripts | ours | `~/.config/hypr`, `~/.local/bin` |
+| Night-light shader, bar panels, session scripts, thumbnail watcher | ours | `~/.config/hypr`, `~/.local/bin`, `~/.config/systemd/user` |
 
 Everything else comes from Debian 14 (some packages from `trixie-backports`: Hyprland and its tools, greetd/tuigreet, kitty, mako, Telegram, the portals) or from the vendors' own repositories.
 

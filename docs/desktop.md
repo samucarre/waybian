@@ -29,14 +29,30 @@ Upstream Waybar is GTK3; the GTK4 port (upstream PR #5366) plus local fixes (a s
 - **Trackpad**: three-finger swipes switch workspaces in the macOS direction; the MX Master's thumb buttons do the same.
 - **Night light**: a Hyprland screen shader tinted according to the local sunset (NOAA solar equations), toggled with ⌘⇧N or automatically. Screenshots are un-tinted afterwards, so captures stay true to colour.
 - **AirDrop**: `omdrop` over the Wi‑Fi chip's AWDL (`omdrop-awdl`; this board is the first M3 in its list). Receiving shows a card with a thumbnail that can be dragged from the first second; sending needs the iPhone's AirDrop sheet open. Early problems (opening the panel powered the radio twice, the receiver started before the AWDL interface existed, every click restarted the stack) were fixed in the integration scripts and verified with 40 rounds of random clicks. The receiver declares no HEIC support, so the iPhone sends JPEG.
-- **Quick Look**: space bar in the file manager (`sushi`); HEIC thumbnails needed `heif-thumbnailer`.
+- **Quick Look**: space bar in the file manager (`sushi`) and in the open dialogs (see [File dialogs](#file-dialogs-thumbnails-and-quick-look)); HEIC thumbnails needed `heif-thumbnailer`.
 - Same wallpaper as macOS, to make the dual boot feel like one machine.
 
 ## GTK4 everywhere
 
-- File dialogs for Hyprland through a GTK4 portal (`xdg-desktop-portal-gtk4`), Nautilus, `fuzzel` as launcher, `satty`, `mako`, `hypridle`/`hyprlock`, Chrome with `--gtk-version=4`. Electron apps, Thunderbird and LibreOffice cannot follow yet.
+- File dialogs for Hyprland through a GTK4 portal (`xdg-desktop-portal-gtk4`, built from our fork for Quick Look), Nautilus, `fuzzel` as launcher, `satty`, `mako`, `hypridle`/`hyprlock`, Chrome with `--gtk-version=4`. Electron apps, Thunderbird and LibreOffice cannot follow yet.
 - **Mail: Postcard.** Debian 14 ships GTK 4.18 and libadwaita 1.7; Postcard needs libadwaita 1.8 (`Adw.ShortcutsDialog`), which needs GTK ≥ 4.19.4. Both were built into a private prefix (`/opt/gtk420`) used only by Postcard, with the X11 backend enabled because Debian's WebKitGTK references `gdk_x11_*` symbols. Postcard runs on an official Python 3.15 build (installed with `uv`) with PyGObject built in a venv, because its inbox watcher uses `IMAP4.idle()` (Python ≥ 3.14). Two generic findings from the fork:
   - **iCloud IMAP answers `UID SEARCH ALL` from a stale index** that still lists messages moved or deleted long ago (129k UIDs for a mailbox of 119k). Any client that prunes its cache with `SEARCH ALL` keeps ghosts that open as "no message body". `UID SEARCH UID 1:*` (or `UNDELETED`) is exact, and faster.
   - iCloud does not push `EXISTS` to every idling session; a watcher that depends on IDLE alone can miss a message for the length of its IDLE period. Short IDLE periods with a cheap `SEARCH` after each one are the safe pattern.
 - D‑Bus-activated services (Nautilus and whatever it launches) only see the environment passed with `dbus-update-activation-environment`; `DISPLAY` had to be added for Xwayland applications opened from the file manager.
 - The session runs without `LANG`, so some apps appear in English; Spanish is set per application where it matters.
+
+## File dialogs: thumbnails and Quick Look
+
+The GTK4 file chooser (the "Open" dialog of Chrome and of every app that goes through the portal) had two gaps:
+
+- **Thumbnails.** It only shows thumbnails that already exist in `~/.cache/thumbnails` (on GNOME, Nautilus creates them as it browses), it takes the largest size there is, and its grid stretches every thumbnail into a square, which distorts landscape and portrait pictures. A small user service (`miniaturas`: `inotifywait` + `glycin-thumbnailer`) creates them for Desktop, Pictures, Downloads and the dialog's bookmarks as soon as a picture appears, is renamed or is hard-linked, and stores them square with transparent padding; it also squares, in every size, the ones Nautilus makes.
+- **Preview.** GTK 4 dropped the chooser's preview widget. Our fork of the portal ([samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian`) adds Quick Look as in the Finder: with the focus in the file list, space opens the selected file in its own window (an image fitted to 70 % × 80 % of the screen, the type icon for anything else, with name, type, dimensions and size), the arrows move to the previous or next file (only through the selected ones when there are several, keeping the selection), and space or Esc closes it, leaving the dialog's cursor on the file that was on screen so that Enter opens that one. The image size is read from the file header first: above 40 megapixels the picture is decoded scaled down, above 100 not at all. Found and fixed before publishing, after a review: an empty folder could crash the portal, closing the dialog with the preview open leaked the image, and Enter opened the file the preview had started from.
+
+<p align="center">
+  <img src="../images/file-chooser-quick-look.gif" alt="Quick Look in a GTK4 open dialog" width="800"><br>
+  <sub>Space bar on a file, the arrows to move through the files, space to close (sample images).</sub>
+</p>
+<p align="center">
+  <img src="../images/thumbnails-before-after.jpg" alt="The same folder: plain GTK 4, ordinary thumbnails, square thumbnails" width="800"><br>
+  <sub>The same folder in the dialog's grid: plain GTK 4 (icons only), ordinary thumbnails (stretched) and the square ones.</sub>
+</p>

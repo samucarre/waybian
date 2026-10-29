@@ -87,7 +87,7 @@ Hyprland 0.56 sobre Wayland, con una forma de trabajar que conserva las costumbr
 - **Luz nocturna** como shader de Hyprland según la puesta de sol local (el driver de pantalla aún no expone matriz de color), que se quita de las capturas después.
 - **AirDrop** desde y hacia un iPhone, con una tarjeta que se puede arrastrar desde que llega el fichero.
 - **Inicio de sesión**: greetd con un greeter de Hyprland mínimo (fondo + terminal translúcida), dibujado por CPU para que funcione aunque falle la GPU, con caída a la consola si lo gráfico no aparece en 40 s.
-- **GTK4 en todo**: Nautilus con portal de ficheros GTK4, Chrome con su backend GTK4, fuzzel, satty y **Postcard** como cliente de correo (compilado contra GTK 4.20 + libadwaita 1.8 en un prefijo propio, corriendo en Python 3.15).
+- **GTK4 en todo**: Nautilus, diálogos de ficheros con un portal GTK4 compilado de nuestro fork con **vista rápida** (Espacio sobre un fichero, como en el Finder) y miniaturas que siempre están, Chrome con su backend GTK4, fuzzel, satty y **Postcard** como cliente de correo (compilado contra GTK 4.20 + libadwaita 1.8 en un prefijo propio, corriendo en Python 3.15).
 
 Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El inventario completo de software (qué viene empaquetado, qué compilamos nosotros, qué dibuja con la GPU y por qué GTK4): [docs/software.md](docs/software.md).
 
@@ -103,6 +103,10 @@ Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El i
   <img src="images/airdrop.jpg" alt="AirDrop" width="400">
   <img src="images/login.jpg" alt="Pantalla de inicio de sesión" width="400"><br>
   <sub>AirDrop desde un iPhone · la pantalla de inicio de sesión.</sub>
+</p>
+<p align="center">
+  <img src="images/selector-vista-rapida.gif" alt="Vista rápida en un diálogo de abrir GTK4" width="800"><br>
+  <sub>Vista rápida en los diálogos de abrir: Espacio sobre un fichero, las flechas para pasar de uno a otro, Espacio para cerrar.</sub>
 </p>
 
 ## Software
@@ -121,7 +125,7 @@ La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la
 | greetd + tuigreet + greeter propio | inicio de sesión | CPU a propósito | backports + nuestro |
 | hyprlock · hypridle · hyprpicker · hyprpolkitagent | bloqueo, inactividad, cuentagotas, polkit | OpenGL / Wayland | backports |
 | grim · slurp · satty | capturas y anotación | satty: GTK4 | Debian 14 · satty binario upstream |
-| xdg-desktop-portal-hyprland · portal-gtk4 | portales, diálogos de ficheros | GTK4 (Rust) | backports · **compilado del espejo** |
+| xdg-desktop-portal-hyprland · portal-gtk4 | portales, diálogos de ficheros con vista rápida | GTK4 (Rust) | Debian 14 · **compilado de nuestro fork** |
 | Nautilus 51 · Loupe 51 · sushi 50 | ficheros, imágenes, vista previa | GTK4 + libadwaita | Debian 14 |
 | pavucontrol 6 | mezclador de audio | GTK4 | Debian 14 |
 | PipeWire · WirePlumber · asahi-audio · speakersafetyd | sonido | — | Debian 14 + Asahi |
@@ -156,7 +160,7 @@ Cada programa que ha necesitado un cambio tiene un fork con su rama, para poder 
 | omdrop-awdl | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | visible/invisible más rápido desde la barra |
 | Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | OAuth de Google con refresh token guardado (sin GNOME Online Accounts), IMAP IDLE en Python < 3.14, una rareza del `SEARCH ALL` de iCloud, interruptor «agrupar conversaciones», arreglo del sandbox de WebKit con un driver GL que no es Mesa, receta para Debian 13 |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | espejo (driver VA‑API del AVD) |
-| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | espejo (diálogos de ficheros GTK4 para Hyprland) |
+| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | vista rápida en los diálogos de abrir GTK4 (Espacio, como en el Finder) |
 | Kernel | fork privado del árbol de Aurora | parches locales, configuraciones y scripts de instalación; ver [docs/kernel-gpu.md](docs/kernel-gpu.md) |
 
 Los forks están montados como submódulos de git en [`forks/`](forks) (cada uno fijado al commit exacto que corre en la máquina), y cada commit nuestro se puede leer también como parche en [`patches/`](patches). Lista completa, bases y recetas: [docs/forks.md](docs/forks.md).

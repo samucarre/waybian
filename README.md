@@ -87,7 +87,7 @@ Hyprland 0.56 on Wayland, with a workflow that keeps the habits of macOS:
 - **Night light** as a Hyprland shader driven by the local sunset (the display driver exposes no colour matrix yet), removed from screenshots afterwards.
 - **AirDrop** to and from an iPhone, with a card you can drag from the moment the file arrives.
 - **Login**: greetd with a minimal Hyprland greeter (wallpaper + translucent terminal), drawn by CPU so it works even without the GPU, falling back to the console if the graphics do not come up in 40 s.
-- **GTK4 everywhere**: Nautilus with a GTK4 file portal, Chrome with its GTK4 backend, fuzzel, satty, and **Postcard** as the mail client (built against GTK 4.20 + libadwaita 1.8 in a private prefix, running on Python 3.15).
+- **GTK4 everywhere**: Nautilus, file dialogs through a GTK4 portal built from our fork with **Quick Look** (space bar on a file, like the Finder) and thumbnails that are always there, Chrome with its GTK4 backend, fuzzel, satty, and **Postcard** as the mail client (built against GTK 4.20 + libadwaita 1.8 in a private prefix, running on Python 3.15).
 
 More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). The full software inventory (what is packaged, what we build ourselves, what draws with the GPU and why GTK4): [docs/software.md](docs/software.md).
 
@@ -103,6 +103,10 @@ More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). T
   <img src="images/airdrop.jpg" alt="AirDrop" width="400">
   <img src="images/login.jpg" alt="Login screen" width="400"><br>
   <sub>AirDrop from an iPhone · the login screen.</sub>
+</p>
+<p align="center">
+  <img src="images/file-chooser-quick-look.gif" alt="Quick Look in a GTK4 open dialog" width="800"><br>
+  <sub>Quick Look in the open dialogs: space bar on a file, the arrows to move through the files, space to close.</sub>
 </p>
 
 ## Software
@@ -121,7 +125,7 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | greetd + tuigreet + own greeter | login | CPU on purpose | backports + ours |
 | hyprlock · hypridle · hyprpicker · hyprpolkitagent | lock, idle, picker, polkit | OpenGL / Wayland | backports |
 | grim · slurp · satty | screenshots, annotation | satty: GTK4 | Debian 14 · satty upstream binary |
-| xdg-desktop-portal-hyprland · portal-gtk4 | portals, file dialogs | GTK4 (Rust) | backports · **built from mirror** |
+| xdg-desktop-portal-hyprland · portal-gtk4 | portals, file dialogs with Quick Look | GTK4 (Rust) | Debian 14 · **built from our fork** |
 | Nautilus 51 · Loupe 51 · sushi 50 | files, images, Quick Look | GTK4 + libadwaita | Debian 14 |
 | pavucontrol 6 | audio mixer | GTK4 | Debian 14 |
 | PipeWire · WirePlumber · asahi-audio · speakersafetyd | sound | — | Debian 14 + Asahi |
@@ -156,7 +160,7 @@ Every program that needed a change has a fork with its own branch, so the system
 | omdrop-awdl | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | faster discoverable on/off from the bar |
 | Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GNOME Online Accounts), IMAP IDLE on Python < 3.14, an iCloud `SEARCH ALL` quirk, a "group conversations" switch, a WebKit sandbox fix for a non-Mesa GL driver, build recipe for Debian 13 |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | mirror (VA‑API driver for the AVD) |
-| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | mirror (GTK4 file dialogs for Hyprland) |
+| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | Quick Look in the GTK4 open dialogs (space bar, like the Finder) |
 | Kernel | private fork of Aurora's tree | local patches, configs and install scripts; see [docs/kernel-gpu.md](docs/kernel-gpu.md) |
 
 The forks are mounted as git submodules under [`forks/`](forks) (each pinned to the exact commit running on the machine), and every commit of ours is also readable as a patch file under [`patches/`](patches). Full list, bases and recipes: [docs/forks.md](docs/forks.md).

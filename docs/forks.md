@@ -8,7 +8,7 @@ Everything that needed a change is kept as a fork with a branch, under github.co
 | aquamarine | [samucarre/aquamarine](https://github.com/samucarre/aquamarine) `hdmi-apple-drm-ext-0.15` (v0.15.1; `hdmi-apple-drm-ext` on v0.11.0 was the Debian 13 one) | GBM renderer for a DRM card without a render node, which is what the M3's HDMI (`apple-drm-ext`) is. Applied cleanly on 0.15.1 for Hyprland 0.56. | `/usr/local/lib/aarch64-linux-gnu/libaquamarine.so.14` |
 | omdrop-awdl (AirDrop) | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | Faster discoverable on/off from the bar. | `/usr/lib/omdrop/` |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | Mirror, no changes: VA‑API driver for the AVD. | `/usr/lib/aarch64-linux-gnu/dri/v4l2_request_drv_video.so` |
-| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | Mirror, no changes (Rust): GTK4 file dialogs through the portal. | `/usr/libexec/xdg-desktop-portal-gtk4` |
+| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` (on upstream `2372e15`) | Quick Look in the open dialogs, like the Finder: space opens the selected file in its own window, the arrows move through the files, space or Esc closes it and Enter then opens the file that was on screen. New module `src/gui/quick_look.rs` (Rust), with unit tests for its image-header reader. | `/usr/libexec/xdg-desktop-portal-gtk4` |
 | Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GOA); a minimal MCP server over its database; "Group Conversations" switch; IMAP IDLE for Python < 3.14; prune with `UID SEARCH UID 1:*` instead of `ALL` (iCloud); WebKit sandbox exposure of a non-system GL driver; `DEBIAN-M3.md` with the GTK 4.20 + libadwaita 1.8 + Python 3.15 recipe. | `/opt/gtk420` + `/usr/local/bin/postcard` |
 | Kernel | private fork of `omacom/linux-aurora` `integration/aurora` | Local patches (panel brightness on J516C, HDMI, small fixes), configs, build/install/update scripts. | `/boot/aurora/`, GRUB entries 2–4 |
 | GTK 4.20.4 + libadwaita 1.8.8 | upstream tarballs | No changes; built into `/opt/gtk420` for Postcard only. | `/opt/gtk420` |
@@ -81,8 +81,16 @@ Fork [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_requ
 
 No commits of ours: a mirror.
 
-### xdg-desktop-portal-gtk4: GTK4 file dialogs (mirror)
+### xdg-desktop-portal-gtk4: Quick Look in the GTK4 file dialogs
 
-Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/master), branch `master`, pinned at `2372e15` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 (mirror, no changes).
+Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `763190a` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
 
-No commits of ours: a mirror.
+| # | Date | Commit | Patch |
+|---|---|---|---|
+| 1 | 2026-10-29 | [FileChooser: preview panel for the selected file](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/55b6519ab1c8a9cba6ea755f625bcb7482227f1e) | [0001-FileChooser-preview-panel-for-the-selected-file.patch](../patches/xdg-desktop-portal-gtk4/0001-FileChooser-preview-panel-for-the-selected-file.patch) |
+| 2 | 2026-10-29 | [FileChooser: Quick Look with the space bar](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/83d326d3b77a19df5e2f7922c22725742449e2ef) | [0002-FileChooser-Quick-Look-with-the-space-bar.patch](../patches/xdg-desktop-portal-gtk4/0002-FileChooser-Quick-Look-with-the-space-bar.patch) |
+| 3 | 2026-10-29 | [FileChooser: keep only Quick Look, drop the side panel](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/6c61876fe1858b129b12598c6066253382832d2c) | [0003-FileChooser-keep-only-Quick-Look-drop-the-side-panel.patch](../patches/xdg-desktop-portal-gtk4/0003-FileChooser-keep-only-Quick-Look-drop-the-side-panel.patch) |
+| 4 | 2026-10-29 | [FileChooser: Quick Look window of a fixed size](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/5c894800139e6c427e7b0ac03267e9d83d5edf3d) | [0004-FileChooser-Quick-Look-window-of-a-fixed-size.patch](../patches/xdg-desktop-portal-gtk4/0004-FileChooser-Quick-Look-window-of-a-fixed-size.patch) |
+| 5 | 2026-10-29 | [FileChooser: Quick Look fixes after a review](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/68d7a420a29e912884f14a86f502e2efec87cb43) | [0005-FileChooser-Quick-Look-fixes-after-a-review.patch](../patches/xdg-desktop-portal-gtk4/0005-FileChooser-Quick-Look-fixes-after-a-review.patch) |
+
+Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a review found (a crash with an empty file list, a leak when the dialog closed with the preview open, the list's cursor left behind by the arrows, the selection lost with several files, huge images). The last commit of the branch, [763190a](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/763190a60d33ecac13c61e9753268af75a7d809e), only adds a README section with screenshots; it is not kept as a patch because it carries images.
