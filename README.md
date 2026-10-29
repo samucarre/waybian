@@ -28,6 +28,7 @@ WayBian is spread over several repositories; this one ties them together.
 |---|---|
 | **samucarre/waybian** (this one) | The presentation: what works and how, every change explained in [`docs/`](docs), screenshots, and the patches of every fork in [`patches/`](patches). |
 | The forks: [Waybar](https://github.com/samucarre/Waybar) · [aquamarine](https://github.com/samucarre/aquamarine) · [Postcard](https://github.com/samucarre/postcard) · [omdrop-awdl](https://github.com/samucarre/omdrop-awdl) · [libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) · [xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | The programs that needed a change, each in its own fork and branch. The [`forks/`](forks) folder links to each one at the exact commit running on the machine and explains it; what each one changes: [The pieces that were changed](#the-pieces-that-were-changed). |
+| [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) | The public fork of Aurora's kernel tree, used to send kernel patches upstream: four pull requests to `omacom/linux-aurora`, open as of 29 Oct ([#258](https://github.com/omacom/linux-aurora/pull/258) GPU report to the power manager, [#259](https://github.com/omacom/linux-aurora/pull/259) J516C panel brightness, [#260](https://github.com/omacom/linux-aurora/pull/260) an AV1 decoding fix, [#261](https://github.com/omacom/linux-aurora/pull/261) more GPU jobs in flight). |
 | The lab repository (private) | The day-to-day log, a mirror of every configuration file, and the scripts that rebuild the system from scratch. |
 | The kernel fork (private) | Aurora's tree with local patches, configurations and install scripts ([docs/kernel-gpu.md](docs/kernel-gpu.md)). |
 
@@ -174,7 +175,7 @@ Every program that needed a change has a fork with its own branch, so the system
 | Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GNOME Online Accounts), IMAP IDLE on Python < 3.14, an iCloud `SEARCH ALL` quirk, a "group conversations" switch, a WebKit sandbox fix for a non-Mesa GL driver, build recipe for Debian 13 (on Debian 14 the system GTK and Python are enough) |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | mirror (VA‑API driver for the AVD) |
 | xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | Quick Look in the GTK4 open dialogs (space bar, like the Finder) |
-| Kernel | private fork of Aurora's tree | local patches, configs and install scripts; see [docs/kernel-gpu.md](docs/kernel-gpu.md) |
+| Kernel | private fork of Aurora's tree | local patches, configs and install scripts; four of the patches are proposed upstream from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (pull requests #258–#261); see [docs/kernel-gpu.md](docs/kernel-gpu.md) |
 
 The forks are mounted as git submodules under [`forks/`](forks) (each pinned to the exact commit running on the machine), and every code commit of ours is also readable as a patch file under [`patches/`](patches). Full list, bases and recipes: [docs/forks.md](docs/forks.md).
 

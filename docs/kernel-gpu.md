@@ -17,6 +17,8 @@
 | `7.2.11-waybian-0.3` (27 Oct) | same as 0.2 | BTF on (`CONFIG_DEBUG_INFO_BTF`), SELinux compiled out; built with clang/lld 21 (Debian 14) | Local patches. The config changes remove two boot errors (see [boot-chain.md](boot-chain.md#a-boot-without-red-lines)). |
 | `7.2.11-waybian-0.4` (28 Oct, **default**) | Aurora of 28 Oct | same as 0.3 | Rebase + local patches. |
 
+Four of the local patches are proposed upstream, as pull requests to Aurora from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (list in [forks.md](forks.md#kernel-patches-proposed-upstream)).
+
 Build: `make -C linux O=build ... -j6` under `nice` (the machine is in use while it builds): an incremental build takes about two minutes on the M3 Max; the first full build with BTF (0.3: new compiler and debug information) took 36 minutes. Install script: modules, `/boot/aurora/{vmlinuz,initrd.img,System.map,config}-<version>`, a GRUB entry with its own id in `/etc/grub.d/40_custom`, the per-version AVD firmware, and it prints the `grub-editenv … next_entry=<id>` line for a one-shot test. `predeterminada` makes it the default; `deshacer` removes all of it.
 
 Lessons that cost a boot each:

@@ -10,7 +10,7 @@ Everything that needed a change is kept as a fork with a branch, under github.co
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | Mirror, no changes: VA‑API driver for the AVD. | `/usr/lib/aarch64-linux-gnu/dri/v4l2_request_drv_video.so` |
 | xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` (on upstream `2372e15`) | Quick Look in the open dialogs, like the Finder: space opens the selected file in its own window, the arrows move through the files, space or Esc closes it and Enter then opens the file that was on screen. New module `src/gui/quick_look.rs` (Rust), with unit tests for its image-header reader. | `/usr/libexec/xdg-desktop-portal-gtk4` |
 | Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GOA); a minimal MCP server over its database; "Group Conversations" switch; IMAP IDLE for Python < 3.14; a reading pane that stays still when a click focuses a message (links open at the first click); prune with `UID SEARCH UID 1:*` instead of `ALL` (iCloud); WebKit sandbox exposure of a non-system GL driver; `DEBIAN-M3.md` with the GTK 4.20 + libadwaita 1.8 + Python 3.15 recipe for Debian 13 and the note that on Debian 14 the system GTK and Python are enough. | `/usr/local/libexec/postcard` + `/usr/local/bin/postcard` (meson, against the system) |
-| Kernel | private fork of `omacom/linux-aurora` `integration/aurora` | Local patches (panel brightness on J516C, HDMI, small fixes), configs, build/install/update scripts. | `/boot/aurora/`, one GRUB entry per kernel, by id (`waybian-0.4` is the default) |
+| Kernel | private fork of `omacom/linux-aurora` `integration/aurora` | Local patches (panel brightness on J516C, HDMI, small fixes), configs, build/install/update scripts. Four of the patches are proposed upstream from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) ([below](#kernel-patches-proposed-upstream)). | `/boot/aurora/`, one GRUB entry per kernel, by id (`waybian-0.4` is the default) |
 | Mesa (Aurora) | Aurora's Mesa | Small Wayland/EGL patch; installed outside the system Mesa, selected by an EGL vendor file. | `~/m3gpu/mesa-aurora` |
 | AVD firmware | [aurora-silicon/avd-fw](https://github.com/aurora-silicon/avd-fw) | No changes; built with Debian's LLVM, SHA‑256 pinned. | `/lib/firmware/<kernel>/apple/avd-fw-v4-t0.bin` |
 
@@ -95,3 +95,14 @@ Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-deskto
 | 5 | 2026-10-29 | [FileChooser: Quick Look fixes after a review](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/68d7a420a29e912884f14a86f502e2efec87cb43) | [0005-FileChooser-Quick-Look-fixes-after-a-review.patch](../patches/xdg-desktop-portal-gtk4/0005-FileChooser-Quick-Look-fixes-after-a-review.patch) |
 
 Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a review found (a crash with an empty file list, a leak when the dialog closed with the preview open, the list's cursor left behind by the arrows, the selection lost with several files, huge images). The last three commits of the branch ([763190a](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/763190a60d33ecac13c61e9753268af75a7d809e), [65bca80](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/65bca805e948fba95f81ab781b0945dd58ab329a) and [b369398](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/b36939883ed9632c04bb619be0174cb1c1711eb8)) only touch the README (a section with screenshots); they are not kept as patches because they carry images.
+
+### Kernel: patches proposed upstream
+
+The kernel that runs is built from a private fork (local patches, configurations, install scripts). Four of its patches were sent to Aurora as pull requests from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora), one branch each; state as of 29 Oct 2026:
+
+| Pull request | Branch | Title | State |
+|---|---|---|---|
+| [#258](https://github.com/omacom/linux-aurora/pull/258) | `t6031-gpu-pmp-report` | soc: apple: report the T6031 GPU to the PMP | open |
+| [#259](https://github.com/omacom/linux-aurora/pull/259) | `j516c-panel-brightness` | drm/apple: v14.7: admit panel brightness on the J516C | open |
+| [#260](https://github.com/omacom/linux-aurora/pull/260) | `avd-av1-invalid-ref-idx` | media: apple: avd: av1: do not index reference_frame_ts with ref_frame_idx -1 | open |
+| [#261](https://github.com/omacom/linux-aurora/pull/261) | `g15-max-inflight` | drm/asahi: g15: allow 8 prefixes in flight per VM (was 2), tunable with g15_max_inflight | open |
