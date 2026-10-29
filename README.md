@@ -18,7 +18,7 @@ This repository is the **presentation** of the project: what it is, how it works
 
 The day-to-day record (every change with its reason, a mirror of every configuration file, patches, and the scripts that rebuild the system from scratch) lives in a separate private repository, `waybian-lab`. Ask if you need something from it.
 
-> **Status (29 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.4`. Expect rough edges.
+> **Status (30 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.9`. Expect rough edges.
 
 ## Repositories
 
@@ -64,7 +64,7 @@ WayBian is spread over several repositories; this one ties them together.
 | **HDMI output** | ✅ | External ultrawide at 3440×1440, 60 Hz, through a patched `aquamarine`. 100 Hz pending. |
 | Hardware video decode (AVD) | ✅ | H.264 / HEVC / VP9 / AV1 through VA‑API (`libva-v4l2-request`): Chrome, mpv, GStreamer. Roughly 5 W less on a video page. |
 | AirDrop | ✅ | Both directions with an iPhone, over the Wi‑Fi chip's AWDL (`omdrop`). |
-| Suspend | ❌ | Not supported on M3 yet. Closing the lid locks the session instead. |
+| Suspend | 🟡 | Suspend-to-idle works when started by hand (`rtcwake`), **GPU included**, and the RTC alarm wakes the machine (kernel 0.9; three out of three in testing). Not wired to the lid yet: closing it still locks the session, and the battery drain while asleep is not measured yet. See [docs/hardware.md](docs/hardware.md#suspend). |
 | Thunderbolt / USB4 | ❌ | No driver. |
 | DisplayPort over USB‑C | ❌ | Investigated; needs kernel and boot-loader work. |
 | Reading the macOS volume | ❌ | Hardware-encrypted APFS; files go through the network. |
@@ -86,7 +86,7 @@ The Asahi installer is used in its **"UEFI environment only"** mode: it shrinks 
 
 ## Kernel and GPU
 
-- **Kernel "WayBian 0.4"**: Aurora Silicon's `integration/aurora` branch (Linux 7.2.11, state of 28 Oct 2026) plus a handful of local patches (panel brightness on this board, external HDMI on the `apple-drm-ext` card, and a few fixes), 16 KiB pages, with BTF and without SELinux, built locally. GRUB keeps Asahi's 7.1.13 as an emergency entry and the previous kernels as fallbacks; new kernels are tried once through `grub-reboot` before becoming the default (0.3 was the exception: GRUB ignored `next_entry` until its image was rebuilt).
+- **Kernel "WayBian 0.9"**: Aurora Silicon's `integration/aurora` branch (Linux 7.2.11, state of 29 Oct 2026) plus local patches (panel brightness on this board, external HDMI on the `apple-drm-ext` card, GPU stamp renumbering so that long GPU compute runs no longer hang the GPU, suspend ported from an open Aurora pull request for the M3 Pro, and the GPU kept powered through suspend), 16 KiB pages, with BTF and without SELinux, built locally. GRUB keeps Asahi's 7.1.13 as an emergency entry and the previous kernels as fallbacks; new kernels are tried once through `grub-reboot` before becoming the default (0.3 was the exception: GRUB ignored `next_entry` until its image was rebuilt).
 - **GPU**: the M3 is a new GPU generation (G15) that Asahi does not drive yet. Before adopting Aurora's driver, the author ported an experimental driver for another M3 variant to the G15C up to stable compute jobs (33 debugging rounds in a day); the lessons are in [docs/kernel-gpu.md](docs/kernel-gpu.md). Today: "Apple M3 Max (G15C B2)", 40 cores in 4 clusters, OpenGL 4.6 and Vulkan 1.4, Hyprland with real acceleration.
 - **Video decode**: the AVD firmware is free software (`aurora-silicon/avd-fw`), built locally and installed per kernel version.
 
@@ -185,7 +185,7 @@ Kernel and root filesystem were built in an arm64 Linux VM, tested in QEMU with 
 
 ## Known issues and what we would love help with
 
-- Suspend, USB4/Thunderbolt and DisplayPort over USB‑C: not there yet.
+- Suspend on lid close (suspend itself works since kernel 0.9; its battery drain is not measured yet), USB4/Thunderbolt and DisplayPort over USB‑C: not there yet.
 - HDMI at 100 Hz (the panel/cable support it; the display path currently negotiates 60 Hz).
 - GPU preemption: Aurora's G15 driver does not interrupt compute work yet, so while a long GPU compute job runs the desktop waits for each of its submissions and freezes.
 - Anything you know about `t6031`/G15 that we got wrong.

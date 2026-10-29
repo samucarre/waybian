@@ -18,7 +18,7 @@ Este repositorio es la **presentación** del proyecto: qué es, cómo funciona, 
 
 El registro del día a día (cada cambio con su porqué, el espejo de todos los ficheros de configuración, los parches y los scripts que reconstruyen el sistema desde cero) está en otro repositorio privado, `waybian-lab`. Pide lo que necesites de él.
 
-> **Estado (29-oct-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.4`. Hay aristas.
+> **Estado (30-oct-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.9`. Hay aristas.
 
 ## Repositorios
 
@@ -64,7 +64,7 @@ WayBian está repartido en varios repositorios; este es el que los une.
 | **Salida HDMI** | ✅ | Monitor ultrapanorámico a 3440×1440 y 60 Hz, con un `aquamarine` parcheado. 100 Hz pendiente. |
 | Decodificación de vídeo por hardware (AVD) | ✅ | H.264 / HEVC / VP9 / AV1 por VA‑API (`libva-v4l2-request`): Chrome, mpv, GStreamer. Unos 5 W menos en una página de vídeo. |
 | AirDrop | ✅ | En los dos sentidos con un iPhone, por el AWDL del propio chip Wi‑Fi (`omdrop`). |
-| Suspensión | ❌ | Aún no hay en el M3. Cerrar la tapa bloquea la sesión. |
+| Suspensión | 🟡 | La suspensión en reposo (s2idle) funciona lanzada a mano (`rtcwake`), **también con la GPU**, y la despierta la alarma del RTC (kernel 0.9; tres de tres en las pruebas). Aún no va con la tapa: cerrarla sigue bloqueando la sesión, y no está medido cuánta batería gasta dormido. Ver [docs/hardware.md](docs/hardware.md#suspend). |
 | Thunderbolt / USB4 | ❌ | Sin driver. |
 | DisplayPort por USB‑C | ❌ | Investigado; necesita trabajo en kernel y arranque. |
 | Leer el disco de macOS | ❌ | APFS cifrado por hardware; los ficheros van por red. |
@@ -86,7 +86,7 @@ El instalador de Asahi se usa en su modo **«UEFI environment only»**: encoge m
 
 ## Kernel y GPU
 
-- **Kernel «WayBian 0.4»**: la rama `integration/aurora` de Aurora Silicon (Linux 7.2.11, estado del 28-oct-2026) más unos pocos parches locales (brillo del panel en esta placa, HDMI externo por la tarjeta `apple-drm-ext` y algún arreglo), páginas de 16 KiB, con BTF y sin SELinux, compilado en local. GRUB conserva el 7.1.13 de Asahi como entrada de emergencia y los kernels anteriores de reserva; un kernel nuevo se prueba una vez con `grub-reboot` antes de ser el predeterminado (la 0.3 fue la excepción: GRUB ignoraba `next_entry` hasta que se rehízo su imagen).
+- **Kernel «WayBian 0.9»**: la rama `integration/aurora` de Aurora Silicon (Linux 7.2.11, estado del 29-oct-2026) más parches locales (brillo del panel en esta placa, HDMI externo por la tarjeta `apple-drm-ext`, renumeración de los sellos de la GPU para que los cálculos largos ya no la cuelguen, la suspensión portada de un PR abierto de Aurora para el M3 Pro y la GPU encendida durante la suspensión), páginas de 16 KiB, con BTF y sin SELinux, compilado en local. GRUB conserva el 7.1.13 de Asahi como entrada de emergencia y los kernels anteriores de reserva; un kernel nuevo se prueba una vez con `grub-reboot` antes de ser el predeterminado (la 0.3 fue la excepción: GRUB ignoraba `next_entry` hasta que se rehízo su imagen).
 - **GPU**: el M3 estrena generación de GPU (G15) y Asahi aún no la maneja. Antes de adoptar el driver de Aurora, el autor portó a la G15C un driver experimental de otra variante del M3 hasta tener cálculo estable (33 rondas de depuración en un día); las lecciones están en [docs/kernel-gpu.md](docs/kernel-gpu.md). Hoy: «Apple M3 Max (G15C B2)», 40 núcleos en 4 grupos, OpenGL 4.6 y Vulkan 1.4, Hyprland con aceleración de verdad.
 - **Vídeo**: el firmware del AVD es software libre (`aurora-silicon/avd-fw`), compilado en local e instalado por versión de kernel.
 
@@ -185,7 +185,7 @@ El kernel y el sistema de ficheros raíz se construyeron en una máquina virtual
 
 ## Lo que falta y en lo que nos vendría bien ayuda
 
-- Suspensión, USB4/Thunderbolt y DisplayPort por USB‑C: aún no.
+- Suspensión al cerrar la tapa (suspender ya funciona desde el kernel 0.9; falta medir cuánta batería gasta), USB4/Thunderbolt y DisplayPort por USB‑C: aún no.
 - HDMI a 100 Hz (el monitor y el cable lo admiten; la ruta de pantalla negocia 60 Hz).
 - Preempción de la GPU: el driver G15 de Aurora aún no interrumpe el cálculo, así que mientras dura un cómputo largo de GPU el escritorio espera a que acabe cada envío y se congela.
 - Cualquier cosa del `t6031`/G15 que tengamos mal.

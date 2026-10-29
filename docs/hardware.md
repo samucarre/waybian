@@ -1,6 +1,6 @@
 # Hardware, component by component
 
-State on 29 Oct 2026 with kernel `7.2.11-waybian-0.4`. "Fix" means something that had to be done on top of Debian 14 and the upstream kernel to make it work on this board (`j516c`).
+State on 30 Oct 2026 with kernel `7.2.11-waybian-0.9`. "Fix" means something that had to be done on top of Debian 14 and the upstream kernel to make it work on this board (`j516c`).
 
 ## Display
 
@@ -49,7 +49,7 @@ See [kernel-gpu.md](kernel-gpu.md). Summary: Apple M3 Max G15C, 40 cores in 4 cl
 
 - Keyboard and trackpad go through `dockchannel-hid` with the `tpmtfw-j516c.bin` firmware from `vendorfw`. Three-finger gestures in Hyprland switch workspaces in the macOS direction. Spanish layout (`es`) in the console, the greeter and the session.
 - Keyboard backlight: `white:kbd_backlight` via `pwm_apple` + `leds_pwm`. The M3 keyboard has no keys for it (Fn+F5/F6 are microphone and sleep), so a bar widget shows a keyboard glyph whose halo follows the level: click for a slider, right click toggles, wheel ±5 %.
-- Lid: logind would suspend, and the M3 does not suspend yet. `HandleLidSwitch=lock` and `AllowSuspend=no`.
+- Lid: still `HandleLidSwitch=lock` and `AllowSuspend=no`. Suspend works since kernel 0.9 (see [Suspend](#suspend)), but it is not wired to the lid until its battery drain is measured.
 
 ## Camera
 
@@ -71,6 +71,15 @@ See [kernel-gpu.md](kernel-gpu.md). Summary: Apple M3 Max G15C, 40 cores in 4 cl
 - Fans: with the chip at 99–107 °C during a long GPU compute job, the SMC keeps them at about 65 % (3,500 and 3,700 rpm). `macsmc_hwmon` with `fan_control=1` lets Linux set them: a small service sets 80 % from 80 °C and the maximum from 88 °C, gives control back to the SMC below 72 °C, and ignores sensors that stop changing (the GPU's keep their last value while the GPU is off).
 - Short press of the power key is "power off" by default in logind; the Touch ID key sits next to Backspace, so a long press only is advisable (`HandlePowerKey=ignore`).
 
+## Suspend
+
+Suspend-to-idle (`s2idle`, the only sleep state here) works since kernel 0.9, started by hand:
+
+- Ported from an open Aurora pull request for the M3 Pro (`omacom/linux-aurora#274`): the PMU's RTC alarm, so `rtcwake` can wake the machine; wake-ups from the PMU's interrupts; the external display requests released during sleep (on this board optional and off by default).
+- What this board needed on top: the RTC alarm is described by the kernel from Apple's device tree at boot, so no new `boot.bin` was needed; the HDMI port's display coprocessor and its power domains stay on through sleep (its firmware starts only once per boot); and the GPU is kept powered through sleep, because nothing starts its firmware again (before that, sleep cut the GPU's power under its running firmware and the GPU never came back).
+- Tested on 29 Oct 2026: three 30‑second sleeps without the GPU driver and three with it loaded, all woken by the RTC alarm. After each one the GPU kept running compute jobs at the same rate, and the panel, brightness, Bluetooth, the speaker safety daemon and the USB‑C ports came back; Wi‑Fi drops in sleep and reconnects by itself in about 15 s. In a 5‑second rehearsal (`pm_test`), with the external display lit the kernel refuses to sleep cleanly, and with it switched off (DPMS) it goes through.
+- Not done yet: the lid (logind still only locks), the battery drain while asleep, and a real sleep with the HDMI display attached.
+
 ## Not working
 
-Suspend, USB4/Thunderbolt, DisplayPort over USB‑C, reading the macOS volume, HDMI above 60 Hz.
+Suspend on lid close (see [Suspend](#suspend)), USB4/Thunderbolt, DisplayPort over USB‑C, reading the macOS volume, HDMI above 60 Hz.

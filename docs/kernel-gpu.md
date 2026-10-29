@@ -15,7 +15,11 @@
 | `7.2.11-waybian-0.1` (26 Oct) | Aurora of 25 Oct | `CONFIG_LOCALVERSION=-waybian-0.1` | Local patches on top; tuned the GPU driver's in-flight job depth, which removed stutter in games. |
 | `7.2.11-waybian-0.2` (26 Oct) | Aurora of 26 Oct (`integration/aurora`, 225 commits newer) | same | Rebase + 7 local patches (panel brightness on J516C, HDMI, and small fixes). |
 | `7.2.11-waybian-0.3` (27 Oct) | same as 0.2 | BTF on (`CONFIG_DEBUG_INFO_BTF`), SELinux compiled out; built with clang/lld 21 (Debian 14) | Local patches. The config changes remove two boot errors (see [boot-chain.md](boot-chain.md#a-boot-without-red-lines)). |
-| `7.2.11-waybian-0.4` (28 Oct, **default**) | Aurora of 28 Oct | same as 0.3 | Rebase + local patches. |
+| `7.2.11-waybian-0.4` (28 Oct) | Aurora of 28 Oct | same as 0.3 | Rebase + local patches. The GPU now asks the power-management coprocessor for memory bandwidth: GPU copies went from 75 to 316 GB/s. |
+| `7.2.11-waybian-0.5`, `0.6` (28 Oct) | same as 0.4 | same | GPU scheduling experiments; not kept (0.6 lost the GPU under a long compute run). |
+| `7.2.11-waybian-0.7` (29 Oct) | same as 0.4 | same | Suspend-to-idle ported from an open Aurora pull request for the M3 Pro (`omacom/linux-aurora#274`) and adapted to this board; the GPU's compute stamp is renumbered while idle before it wraps (a long GPU compute run, about 390 FLUX images, used to hang the GPU until reboot); the render stamps' renumbering now works on every wrap, not only the first. |
+| `7.2.11-waybian-0.8` (29 Oct) | Aurora of 29 Oct | same | The 0.7 patches rebased. |
+| `7.2.11-waybian-0.9` (29 Oct, **default**) | same as 0.8 | same | The GPU stays powered through suspend (its firmware is never restarted), so the machine sleeps and wakes with the GPU running. |
 
 Four of the local patches are proposed upstream, as pull requests to Aurora from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (list in [forks.md](forks.md#kernel-patches-proposed-upstream)).
 
