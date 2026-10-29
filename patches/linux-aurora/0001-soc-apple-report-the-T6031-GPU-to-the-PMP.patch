@@ -1,0 +1,229 @@
+From bb0d66e5ad7b72ff6f9d0e7656a376274871cc2b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Wed, 28 Oct 2026 11:00:56 +0100
+Subject: [PATCH] soc: apple: report the T6031 GPU to the PMP
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The T6031 (M3 Max) G15 GPU is powered by its PMGR domain alone, with no
+RTKit vote, and nothing sets its PTD power request. PMP then ignores the
+GPU's bandwidth demand and memory stays at its idle floor.
+
+Port the T6030 report (9bb74767dc) to T6031: AGX is the acknowledged
+soc-device ID 14 (record 13) of the J516C table, on the T6031 report
+apertures. Set it after firmware and backend setup, clearing it first,
+since an earlier request is acknowledged without enabling bandwidth
+scaling. A failure only warns and clears the request, which is how the
+GPU ran before. The session and the request stay until reboot.
+
+With Mesa unchanged, compute-copy bandwidth (test-backend-ops perf -o CPY,
+Vulkan) goes from 75 to 316 GB/s for 1.5 GB f32 copies and from 56 to
+200 GB/s for 768 MB f16/bf16 copies. Tested on an M3 Max J516C, on top
+of local patches (HDMI, panel brightness, AVD AV1, in-flight cap); the
+panel, HDMI, brightness and AVD keep working.
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ drivers/gpu/drm/asahi/Kconfig        |  1 +
+ drivers/gpu/drm/asahi/g15/boot.rs    |  1 +
+ drivers/gpu/drm/asahi/g15/glue.c     |  8 +++++
+ drivers/gpu/drm/asahi/g15/mod.rs     | 15 ++++++++
+ drivers/pmdomain/apple/pmp-report.c  | 52 ++++++++++++++++++++++++++++
+ drivers/soc/apple/Kconfig            | 10 ++++++
+ include/linux/soc/apple/pmp-report.h |  7 ++++
+ 7 files changed, 94 insertions(+)
+
+diff --git a/drivers/gpu/drm/asahi/Kconfig b/drivers/gpu/drm/asahi/Kconfig
+index 0e989189206bade..a32095f36ca9829 100644
+--- a/drivers/gpu/drm/asahi/Kconfig
++++ b/drivers/gpu/drm/asahi/Kconfig
+@@ -67,6 +67,7 @@ config DRM_ASAHI_G15
+ 	depends on DRM_ASAHI
+ 	depends on DRM_APPLE=y || (DRM_APPLE=m && DRM_ASAHI=m)
+ 	select APPLE_T6030_GPU_PMP_LINK
++	select APPLE_T6031_GPU_PMP_REPORT
+ 	select CRYPTO_LIB_SHA256
+ 	select DRM_ASAHI_UAT_ADOPTION
+ 	default n
+diff --git a/drivers/gpu/drm/asahi/g15/boot.rs b/drivers/gpu/drm/asahi/g15/boot.rs
+index 45e244531323d7e..8ea95d88e900234 100644
+--- a/drivers/gpu/drm/asahi/g15/boot.rs
++++ b/drivers/gpu/drm/asahi/g15/boot.rs
+@@ -75,6 +75,7 @@ pub(crate) mod glue {
+         pub(crate) fn asahi_g15_display_prepare(dev: *mut core::ffi::c_void) -> core::ffi::c_int;
+         pub(crate) fn asahi_g15_pmp_get(dev: *mut core::ffi::c_void) -> core::ffi::c_int;
+         pub(crate) fn asahi_g15_pmp_ready() -> core::ffi::c_int;
++        pub(crate) fn asahi_g15_pmp_report_t6031(enable: bool) -> core::ffi::c_int;
+         pub(crate) fn asahi_g15_pmp_put(dev: *mut core::ffi::c_void);
+         fn asahi_g15_reserved_uat(index: u32, start: u64, size: u64) -> bool;
+     }
+diff --git a/drivers/gpu/drm/asahi/g15/glue.c b/drivers/gpu/drm/asahi/g15/glue.c
+index 385b9fde3905388..8b09a012a4c7c51 100644
+--- a/drivers/gpu/drm/asahi/g15/glue.c
++++ b/drivers/gpu/drm/asahi/g15/glue.c
+@@ -19,6 +19,7 @@
+ #include <linux/pfn.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/soc/apple/pmp.h>
++#include <linux/soc/apple/pmp-report.h>
+ #include <linux/soc/apple/display.h>
+ 
+ void asahi_g15_sha256(const u8 *data, size_t len, u8 *out);
+@@ -37,6 +38,7 @@ int asahi_g15_pmp_prepare(struct device *dev);
+ int asahi_g15_display_prepare(struct device *dev);
+ int asahi_g15_pmp_get(struct device *dev);
+ int asahi_g15_pmp_ready(void);
++int asahi_g15_pmp_report_t6031(bool enable);
+ void asahi_g15_pmp_put(struct device *dev);
+ bool asahi_g15_reserved_uat(u32 index, u64 start, u64 size);
+ 
+@@ -184,6 +186,12 @@ int asahi_g15_pmp_ready(void)
+ 	return apple_pmp_t6030_gpu_ready();
+ }
+ 
++/* T6031: the AGX request of the PMP report, after the firmware is running. */
++int asahi_g15_pmp_report_t6031(bool enable)
++{
++	return apple_pmp_report_t6031_gfx(enable);
++}
++
+ /*
+  * Give back the vote of asahi_g15_pmp_get() after a start that failed before
+  * the firmware was touched. The full M3 stack's J514S bridge has no release:
+diff --git a/drivers/gpu/drm/asahi/g15/mod.rs b/drivers/gpu/drm/asahi/g15/mod.rs
+index 8bfa34a5892fdee..f9ff5ec7f1cc543 100644
+--- a/drivers/gpu/drm/asahi/g15/mod.rs
++++ b/drivers/gpu/drm/asahi/g15/mod.rs
+@@ -566,6 +566,21 @@ impl Firmware {
+             } = KBox::into_inner(firmware);
+             return Err(orphan(session, objects, channels, init, events, e));
+         }
++        if cfg.platform == hw::Platform::DeviceTree {
++            // T6031: nothing else sets the PMP's AGX request, and without it memory stays at its
++            // idle floor. Set it after setup, as T6030 does; a failure keeps the GPU as before.
++            // SAFETY: The session is retained until reboot, and the request with it.
++            let ret = unsafe { boot::glue::asahi_g15_pmp_report_t6031(true) };
++            if ret == 0 {
++                dev_info!(dev.as_ref(), "G15: PMP AGX request set (memory bandwidth scaling)\n");
++            } else if ret != ENODEV.to_errno() {
++                dev_warn!(
++                    dev.as_ref(),
++                    "G15: PMP AGX request failed ({}); memory stays at its idle floor\n",
++                    ret
++                );
++            }
++        }
+         Ok(firmware)
+     }
+ }
+diff --git a/drivers/pmdomain/apple/pmp-report.c b/drivers/pmdomain/apple/pmp-report.c
+index 98d96d08f8a4342..0b639821843c027 100644
+--- a/drivers/pmdomain/apple/pmp-report.c
++++ b/drivers/pmdomain/apple/pmp-report.c
+@@ -1348,6 +1348,58 @@ int apple_pmp_report_set_t6030_gfx(struct device *supplier, bool enable)
+ }
+ EXPORT_SYMBOL_GPL(apple_pmp_report_set_t6030_gfx);
+ 
++/*
++ * T6031 (M3 Max): the GPU is powered by its PMGR domain alone, with no RTKit
++ * vote, and nothing sets its PTD request, so PMP ignores the GPU's bandwidth
++ * demand and memory stays at its idle floor. AGX is the acknowledged
++ * soc-device ID 14 (record 13) of the J516C table. As on T6030, a request
++ * made before the firmware runs is acknowledged without enabling bandwidth
++ * scaling: enabling clears and sets it again. On a failed enable the request
++ * is cleared, which is how the GPU ran before.
++ */
++int apple_pmp_report_t6031_gfx(bool enable)
++{
++	struct apple_pmp_report *rep, *found = NULL;
++	struct device_node *pmp = NULL;
++	const u8 *table = NULL;
++	int len = 0, ret = -ENODEV;
++
++	if (!IS_ENABLED(CONFIG_APPLE_T6031_GPU_PMP_REPORT) ||
++	    !of_machine_is_compatible("apple,t6031"))
++		return -ENODEV;
++
++	rcu_read_lock();
++	list_for_each_entry_rcu(rep, &apple_pmp_reports, list) {
++		if (rep->offsets != &apple_pmp_offsets_t6031)
++			continue;
++		if (found)
++			goto out;
++		found = rep;
++	}
++	if (!found)
++		goto out;
++	pmp = of_parse_phandle(found->dev->of_node, "apple,pmp", 0);
++	if (pmp && of_device_is_compatible(pmp, "apple,t6031-pmp-v2"))
++		table = of_get_property(pmp, "apple,tunable-soc-device", &len);
++	if (!apple_pmp_devices_valid(table, len > 0 ? len : 0, BIT_ULL(13), BIT_ULL(13), true) ||
++	    memcmp(table + 13 * PMP_SOC_DEVICE_SIZE + 116, "AGX\0\0\0\0\0", 8)) {
++		ret = -EINVAL;
++	} else if (readq(found->base + found->offsets->status) != PMP_REPORT_READY) {
++		ret = -EAGAIN;
++	} else {
++		ret = apple_pmp_report_set_state(found, 13, false, false);
++		if (!ret && enable)
++			ret = apple_pmp_report_set_state(found, 13, true, false);
++		if (ret && enable)
++			apple_pmp_report_set_state(found, 13, false, false);
++	}
++	of_node_put(pmp);
++out:
++	rcu_read_unlock();
++	return ret;
++}
++EXPORT_SYMBOL_GPL(apple_pmp_report_t6031_gfx);
++
+ static int apple_pmp_report_entry_set_state(struct generic_pm_domain *genpd, bool enable)
+ {
+ 	struct apple_pmp_report_entry *ent = genpd_to_apple_pmp_report_entry(genpd);
+diff --git a/drivers/soc/apple/Kconfig b/drivers/soc/apple/Kconfig
+index ba57db91f8860b1..fd64eae1b7280cf 100644
+--- a/drivers/soc/apple/Kconfig
++++ b/drivers/soc/apple/Kconfig
+@@ -257,6 +257,16 @@ config APPLE_T6030_GPU_PMP_LINK
+ 	  GPU power commands wait for that supplier's acknowledged display
+ 	  request through the existing PMP report startup and removal rules.
+ 
++config APPLE_T6031_GPU_PMP_REPORT
++	bool
++	depends on APPLE_PMP_REPORT
++	default n
++	help
++	  Set the AGX request of the T6031 (M3 Max) PMP report once the G15
++	  firmware runs. The T6031 GPU is powered by its PMGR domain alone, so
++	  nothing else sets that request, and without it the PMP ignores the
++	  GPU's bandwidth demand: memory stays at its idle floor.
++
+ config APPLE_DISPLAY_GATE_KUNIT_TEST
+ 	bool "KUnit tests for the Apple display gate" if !KUNIT_ALL_TESTS
+ 	depends on KUNIT=y && APPLE_T6030_DISPLAY_GATE
+diff --git a/include/linux/soc/apple/pmp-report.h b/include/linux/soc/apple/pmp-report.h
+index 1d0689f31c2039b..53098fc67edb017 100644
+--- a/include/linux/soc/apple/pmp-report.h
++++ b/include/linux/soc/apple/pmp-report.h
+@@ -18,6 +18,8 @@ int apple_pmp_report_wait_supplier_ready(struct device *supplier, unsigned int t
+ /* Caller holds the PMP owner's vote lock and keeps the supplier bound. */
+ int apple_pmp_report_check_t6030_gfx(struct device *supplier);
+ int apple_pmp_report_set_t6030_gfx(struct device *supplier, bool enable);
++/* After the T6031 G15 firmware is running; the request stays until reboot. */
++int apple_pmp_report_t6031_gfx(bool enable);
+ int apple_pmp_report_wait_ready(struct device_node *entry, unsigned long timeout);
+ int apple_pmp_report_fast_die_effort(const struct device_node *np,
+ 				     unsigned int lane, u8 *effort);
+@@ -38,6 +40,11 @@ static inline int apple_pmp_report_set_t6030_gfx(struct device *supplier, bool e
+ 	return -ENODEV;
+ }
+ 
++static inline int apple_pmp_report_t6031_gfx(bool enable)
++{
++	return -ENODEV;
++}
++
+ static inline int apple_pmp_report_wait_ready(struct device_node *entry,
+ 					      unsigned long timeout)
+ {

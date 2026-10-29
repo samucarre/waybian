@@ -98,11 +98,11 @@ Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a revie
 
 ### Kernel: patches proposed upstream
 
-The kernel that runs is built from a private fork (local patches, configurations, install scripts). Four of its patches were sent to Aurora as pull requests from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora), one branch each; state as of 29 Oct 2026:
+The kernel that runs is built from a private fork (local patches, configurations, install scripts). Four of its patches were sent to Aurora as pull requests from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora), one branch each, all on top of `30a6518` (the Aurora commit 0.4 is based on). The fork is mounted as `forks/linux-aurora` at `30a6518` with `update = none`, so a recursive clone does not download it. State as of 29 Oct 2026:
 
-| Pull request | Branch | Title | State |
-|---|---|---|---|
-| [#258](https://github.com/omacom/linux-aurora/pull/258) | `t6031-gpu-pmp-report` | soc: apple: report the T6031 GPU to the PMP | open |
-| [#259](https://github.com/omacom/linux-aurora/pull/259) | `j516c-panel-brightness` | drm/apple: v14.7: admit panel brightness on the J516C | open |
-| [#260](https://github.com/omacom/linux-aurora/pull/260) | `avd-av1-invalid-ref-idx` | media: apple: avd: av1: do not index reference_frame_ts with ref_frame_idx -1 | open |
-| [#261](https://github.com/omacom/linux-aurora/pull/261) | `g15-max-inflight` | drm/asahi: g15: allow 8 prefixes in flight per VM (was 2), tunable with g15_max_inflight | open |
+| Pull request | Branch | Title | State | Patch |
+|---|---|---|---|---|
+| [#258](https://github.com/omacom/linux-aurora/pull/258) | `t6031-gpu-pmp-report` | soc: apple: report the T6031 GPU to the PMP | open | [0001](../patches/linux-aurora/0001-soc-apple-report-the-T6031-GPU-to-the-PMP.patch) |
+| [#259](https://github.com/omacom/linux-aurora/pull/259) | `j516c-panel-brightness` | drm/apple: v14.7: admit panel brightness on the J516C | open | [0002](../patches/linux-aurora/0002-drm-apple-v14-7-admit-panel-brightness-on-the-J516C.patch) |
+| [#260](https://github.com/omacom/linux-aurora/pull/260) | `avd-av1-invalid-ref-idx` | media: apple: avd: av1: do not index reference_frame_ts with ref_frame_idx -1 | open | [0003](../patches/linux-aurora/0003-media-apple-avd-av1-do-not-index-reference-frame-ts-with-ref.patch) |
+| [#261](https://github.com/omacom/linux-aurora/pull/261) | `g15-max-inflight` | drm/asahi: g15: allow 8 prefixes in flight per VM (was 2), tunable with g15_max_inflight | open | [0004](../patches/linux-aurora/0004-drm-asahi-g15-allow-8-prefixes-in-flight-per-VM-was-2-tunabl.patch) |

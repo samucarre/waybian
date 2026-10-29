@@ -1,0 +1,121 @@
+From 801ad8b1f2428165374927eba4b29fc8c02a73cf Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Mon, 26 Oct 2026 21:45:42 +0100
+Subject: [PATCH] drm/asahi: g15: allow 8 prefixes in flight per VM (was 2),
+ tunable with g15_max_inflight
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On the T6031 (J516C) a browser submits one render per job. With only two
+prefixes in flight and ~612 us of host/firmware turnaround per flight while
+the GPU work per render is ~88 us (asahi-g15/stats span vs busy), the engine
+held publication on the in-flight cap ~3 times per job (stats hold[0]) and the
+GPU idled ~85% of every flight: at 120 Hz Chrome's ~2.7k renders/s hit the
+~3.3k/s ceiling and frames queued up as stutter. Power (17-24 W) and a
+resolution-scaling test (1322 -> 1276 fps for 4x pixels) showed the GPU was
+starved, not busy; pstate was already 8/8.
+
+Raise FLIGHTS and MAX_INFLIGHT to 8 and add g15_max_inflight (0: tuned value,
+1..8) so it can be lowered without a rebuild. Later flights still have to be of
+the same VM; pass slots (16) and CT buffers bound the rest, and
+publish_prefix_into already backs off with EAGAIN when they are held.
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ drivers/gpu/drm/asahi/asahi_core.rs |  4 ++++
+ drivers/gpu/drm/asahi/g15/engine.rs |  8 ++++----
+ drivers/gpu/drm/asahi/g15/hw.rs     | 11 +++++++----
+ drivers/gpu/drm/asahi/g15/params.rs |  8 ++++++++
+ 4 files changed, 23 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/asahi/asahi_core.rs b/drivers/gpu/drm/asahi/asahi_core.rs
+index 0fbe6e728773d3..7e95b7f1c909c8 100644
+--- a/drivers/gpu/drm/asahi/asahi_core.rs
++++ b/drivers/gpu/drm/asahi/asahi_core.rs
+@@ -123,6 +123,10 @@ module! {
+             default: 100,
+             description: "G15: completion repoll interval, us (25..1000)",
+         },
++        g15_max_inflight: u32 {
++            default: 0,
++            description: "G15: published prefixes in flight per VM at most (1..8; 0: the tuned value)",
++        },
+         g15_idle_standby_us: u32 {
+             default: 0,
+             description: "G15: firmware idle standby time override, us (Globals +0x7a8, 100..100000; 0: the device tree's, else the tuned value)",
+diff --git a/drivers/gpu/drm/asahi/g15/engine.rs b/drivers/gpu/drm/asahi/g15/engine.rs
+index 80e4a31a78706d..67f420b82a00e1 100644
+--- a/drivers/gpu/drm/asahi/g15/engine.rs
++++ b/drivers/gpu/drm/asahi/g15/engine.rs
+@@ -9,9 +9,9 @@
+ //! then thresholds/counters once per prefix, then one queue WRITE per queue, then channel
+ //! records, then doorbells (compute, FS, TA). A compute-only job that ends its prefix pulls
+ //! further ready compute-only jobs of the same queue and VM into a *horizon* (up to 16, posted
+-//! ahead at the observed depth). At most [`super::hw::sizes::FLIGHTS`] prefixes are in flight,
+-//! the second only of the same VM, posted behind the first's unconsumed records
+-//! (submit-ahead). Ordering is a total order, which satisfies the header barriers and
++//! ahead at the observed depth). At most [`super::hw::sizes::FLIGHTS`] prefixes are in flight
++//! (`g15_max_inflight`), after the first only of the same VM, each posted behind the previous
++//! one's unconsumed records (submit-ahead). Ordering is a total order, which satisfies the header barriers and
+ //! EXACT_PRIOR ordinals validated at submission. Priming: after a recovered abort and for the
+ //! first render prefix after boot, an exclusive one-render prefix rebuilds the render
+ //! allocators and blocks publication behind it until it retires.
+@@ -545,7 +545,7 @@ impl Firmware {
+     /// Returns Err only when this call latched the engine failed (a publication error after a
+     /// queue WRITE advanced, or a partly sent job): the caller latches the fail-stop.
+     pub(crate) fn publish(&mut self, done: &mut Completions) -> Result {
+-        let max_inflight = tuning::MAX_INFLIGHT.clamp(1, sizes::FLIGHTS as u32) as usize;
++        let max_inflight = params::max_inflight() as usize;
+         let mut result = Ok(());
+ 
+         self.engine.chan_wait = false;
+diff --git a/drivers/gpu/drm/asahi/g15/hw.rs b/drivers/gpu/drm/asahi/g15/hw.rs
+index f231e573c40176..0a49c3c74ec723 100644
+--- a/drivers/gpu/drm/asahi/g15/hw.rs
++++ b/drivers/gpu/drm/asahi/g15/hw.rs
+@@ -506,8 +506,11 @@ pub(crate) mod sizes {
+     pub(crate) const PB_BLOCKS: u32 = 4096;
+     pub(crate) const PB_LIST_RECORDS: u32 = 4096;
+     pub(crate) const PB_GROW_STEP: u32 = 10;
+-    /// Flights (published prefixes) in flight at most; the second must be of the same VM.
+-    pub(crate) const FLIGHTS: usize = 2;
++    /// Flights (published prefixes) in flight at most; after the first, only of the same VM.
++    /// Measured on the T6031 (J516C, 26-oct-2026): with 2, a browser's one-render jobs held
++    /// publication ~3 times per job (stats hold[0]) and the GPU spent ~75% of each flight idle
++    /// (span 88 us of a 612 us flight). 8 keeps the GPU fed; pass slots (16) bound the rest.
++    pub(crate) const FLIGHTS: usize = 8;
+     /// Jobs per compute horizon, and scheduler credits per queue.
+     pub(crate) const HORIZON_JOBS: u32 = 16;
+     /// Unconsumed records per 256-entry channel ring a prefix may be posted behind.
+@@ -565,8 +568,8 @@ pub(crate) mod tuning {
+     pub(crate) const PASS_FULL_RESET: bool = true;
+     /// Rotating compute-slot cursor.
+     pub(crate) const SLOT_ROTATE: bool = true;
+-    /// Flights per VM.
+-    pub(crate) const MAX_INFLIGHT: u32 = 2;
++    /// Flights per VM (tunable: `g15_max_inflight`, 0 = this value).
++    pub(crate) const MAX_INFLIGHT: u32 = 8;
+     /// PB growth through event 7 / DEVCTL 7; the initial posting is `g15_pb_blocks` (64).
+     pub(crate) const PB_GROW: bool = true;
+     /// The most PB blocks that may be posted: one below the mapped heap's block count, so the
+diff --git a/drivers/gpu/drm/asahi/g15/params.rs b/drivers/gpu/drm/asahi/g15/params.rs
+index 48d21e45d0acd6..683b36c908e1d7 100644
+--- a/drivers/gpu/drm/asahi/g15/params.rs
++++ b/drivers/gpu/drm/asahi/g15/params.rs
+@@ -37,6 +37,14 @@ pub(crate) fn repoll_us() -> u32 {
+ pub(crate) fn resnap_us() -> u32 {
+     (*module_parameters::g15_resnap_us.value()).clamp(25, 1000)
+ }
++/// Published prefixes in flight per VM at most (0: the tuned value), bounded by the flight slots.
++pub(crate) fn max_inflight() -> u32 {
++    match *module_parameters::g15_max_inflight.value() {
++        0 => hw::tuning::MAX_INFLIGHT,
++        n => n,
++    }
++    .clamp(1, hw::sizes::FLIGHTS as u32)
++}
+ 
+ /// The explicit firmware idle standby time, us (0: not set).
+ pub(crate) fn idle_standby_override_us() -> u32 {
