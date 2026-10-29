@@ -198,4 +198,4 @@ Open an [issue](../../issues) or start a [discussion](../../discussions).
 
 ## License
 
-The texts and images of this repository are under [CC BY 4.0](LICENSE): you can reuse and adapt them, crediting "Samuel Carreño, WayBian" with a link here. The patches in [`patches/`](patches) keep the license of the program they apply to, and the forks keep their upstream licenses.
+The texts and images of this repository are under [CC BY-NC 4.0](LICENSE): you can share and adapt them for non-commercial purposes, crediting "Samuel Carreño, WayBian" with a link here; any commercial use needs the author's permission first. The patches in [`patches/`](patches) keep the license of the program they apply to, and the forks keep their upstream licenses.

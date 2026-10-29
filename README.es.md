@@ -198,4 +198,4 @@ Abre un [issue](../../issues) o una [discusión](../../discussions).
 
 ## Licencia
 
-Los textos y las imágenes de este repositorio están bajo [CC BY 4.0](LICENSE): puedes reutilizarlos y adaptarlos citando «Samuel Carreño, WayBian» con un enlace aquí. Los parches de [`patches/`](patches) conservan la licencia del programa al que se aplican, y los forks, la de su upstream.
+Los textos y las imágenes de este repositorio están bajo [CC BY-NC 4.0](LICENSE): puedes compartirlos y adaptarlos sin fines comerciales, citando «Samuel Carreño, WayBian» con un enlace aquí; para cualquier uso comercial hace falta permiso previo del autor. Los parches de [`patches/`](patches) conservan la licencia del programa al que se aplican, y los forks, la de su upstream.
