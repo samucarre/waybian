@@ -84,7 +84,7 @@ No commits of ours: a mirror.
 
 ### xdg-desktop-portal-gtk4: Quick Look in the GTK4 file dialogs
 
-Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `65bca80` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
+Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `b369398` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
@@ -94,4 +94,4 @@ Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-deskto
 | 4 | 2026-10-29 | [FileChooser: Quick Look window of a fixed size](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/5c894800139e6c427e7b0ac03267e9d83d5edf3d) | [0004-FileChooser-Quick-Look-window-of-a-fixed-size.patch](../patches/xdg-desktop-portal-gtk4/0004-FileChooser-Quick-Look-window-of-a-fixed-size.patch) |
 | 5 | 2026-10-29 | [FileChooser: Quick Look fixes after a review](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/68d7a420a29e912884f14a86f502e2efec87cb43) | [0005-FileChooser-Quick-Look-fixes-after-a-review.patch](../patches/xdg-desktop-portal-gtk4/0005-FileChooser-Quick-Look-fixes-after-a-review.patch) |
 
-Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a review found (a crash with an empty file list, a leak when the dialog closed with the preview open, the list's cursor left behind by the arrows, the selection lost with several files, huge images). The last two commits of the branch, [763190a](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/763190a60d33ecac13c61e9753268af75a7d809e) and [65bca80](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/65bca805e948fba95f81ab781b0945dd58ab329a), only touch the README (a section with screenshots); they are not kept as patches because they carry images.
+Commit 3 removes the side panel that commit 1 added; commit 5 fixes what a review found (a crash with an empty file list, a leak when the dialog closed with the preview open, the list's cursor left behind by the arrows, the selection lost with several files, huge images). The last three commits of the branch ([763190a](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/763190a60d33ecac13c61e9753268af75a7d809e), [65bca80](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/65bca805e948fba95f81ab781b0945dd58ab329a) and [b369398](https://github.com/samucarre/xdg-desktop-portal-gtk4/commit/b36939883ed9632c04bb619be0174cb1c1711eb8)) only touch the README (a section with screenshots); they are not kept as patches because they carry images.

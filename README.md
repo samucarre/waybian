@@ -94,7 +94,7 @@ More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). T
 
 <p align="center">
   <img src="images/desktop.jpg" alt="WayBian desktop" width="800"><br>
-  <sub>The desktop on 24 Oct 2026, still on Debian 13, with the system information panel.</sub>
+  <sub>The desktop, with the system information panel.</sub>
 </p>
 <p align="center">
   <img src="images/waybar-panels.jpg" alt="Waybar and its panels" width="800"><br>
@@ -106,8 +106,9 @@ More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). T
   <sub>AirDrop from an iPhone · the login screen.</sub>
 </p>
 <p align="center">
-  <img src="images/file-chooser-quick-look.gif" alt="Quick Look in a GTK4 open dialog" width="800"><br>
-  <sub>Quick Look in the open dialogs: space bar on a file, the arrows to move through the files, space to close.</sub>
+  <img src="images/file-chooser-grid.jpg" alt="A GTK4 open dialog with square thumbnails" width="400">
+  <img src="images/file-chooser-quick-look.jpg" alt="Quick Look in a GTK4 open dialog" width="400"><br>
+  <sub>The open dialog with its thumbnails, and Quick Look after pressing space (the files are screenshots of WayBian).</sub>
 </p>
 
 ## Software

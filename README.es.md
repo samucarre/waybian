@@ -94,7 +94,7 @@ Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El i
 
 <p align="center">
   <img src="images/desktop.jpg" alt="Escritorio de WayBian" width="800"><br>
-  <sub>El escritorio el 24-oct-2026, aún en Debian 13, con el panel de información del sistema.</sub>
+  <sub>El escritorio, con el panel de información del sistema.</sub>
 </p>
 <p align="center">
   <img src="images/waybar-panels.jpg" alt="Waybar y sus paneles" width="800"><br>
@@ -106,8 +106,9 @@ Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El i
   <sub>AirDrop desde un iPhone · la pantalla de inicio de sesión.</sub>
 </p>
 <p align="center">
-  <img src="images/selector-vista-rapida.gif" alt="Vista rápida en un diálogo de abrir GTK4" width="800"><br>
-  <sub>Vista rápida en los diálogos de abrir: Espacio sobre un fichero, las flechas para pasar de uno a otro, Espacio para cerrar.</sub>
+  <img src="images/selector-cuadricula.jpg" alt="Un diálogo de abrir GTK4 con miniaturas cuadradas" width="400">
+  <img src="images/selector-vista-rapida.jpg" alt="Vista rápida en un diálogo de abrir GTK4" width="400"><br>
+  <sub>El diálogo de abrir con sus miniaturas, y la vista rápida al pulsar Espacio (los ficheros son capturas de WayBian).</sub>
 </p>
 
 ## Software

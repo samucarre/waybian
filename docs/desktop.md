@@ -61,8 +61,13 @@ The GTK4 file chooser (the "Open" dialog of Chrome and of every app that goes th
 - **Preview.** GTK 4 dropped the chooser's preview widget. Our fork of the portal ([samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian`) adds Quick Look as in the Finder: with the focus in the file list, space opens the selected file in its own window of 70 % × 80 % of the screen (an image is fitted inside and never enlarged; anything else shows its type icon), with name, type, size and, for images, dimensions; the arrows move to the previous or next file (only through the selected ones when there are several, keeping the selection), and space or Esc closes it, leaving the dialog's cursor on the file that was on screen so that Enter opens that one. For PNG, GIF, WebP and JPEG the image size is read from the file header first: above 40 megapixels the picture is decoded scaled down, above 100 not at all; nothing over 64 MiB is decoded. A review then found and fixed three bugs: an empty folder could crash the portal, closing the dialog with the preview open leaked the image, and Enter opened the file the preview had started from.
 
 <p align="center">
-  <img src="../images/file-chooser-quick-look.gif" alt="Quick Look in a GTK4 open dialog" width="800"><br>
-  <sub>Space bar on a file, the arrows to move through the files, space to close (sample images).</sub>
+  <img src="../images/file-chooser-grid.jpg" alt="A GTK4 open dialog with square thumbnails" width="400">
+  <img src="../images/file-chooser-quick-look.jpg" alt="Quick Look in a GTK4 open dialog" width="400"><br>
+  <sub>The dialog's grid and Quick Look after pressing space (the files are screenshots of WayBian).</sub>
+</p>
+<p align="center">
+  <img src="../images/file-chooser-quick-look-portrait.jpg" alt="Quick Look with a portrait image" width="800"><br>
+  <sub>Three files further with the arrow keys: a portrait image fitted in the same window.</sub>
 </p>
 <p align="center">
   <img src="../images/thumbnails-before-after.jpg" alt="The same folder: plain GTK 4, ordinary thumbnails, square thumbnails" width="800"><br>
