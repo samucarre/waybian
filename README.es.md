@@ -20,6 +20,17 @@ El registro del día a día (cada cambio con su porqué, el espejo de todos los 
 
 > **Estado (29-oct-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.4`. Hay aristas.
 
+## Repositorios
+
+WayBian está repartido en varios repositorios; este es el que los une.
+
+| Repositorio | Qué es |
+|---|---|
+| **samucarre/waybian** (este) | La presentación: qué funciona y cómo, cada cambio explicado en [`docs/`](docs), capturas y los parches de cada fork en [`patches/`](patches). |
+| Los forks: [Waybar](https://github.com/samucarre/Waybar) · [aquamarine](https://github.com/samucarre/aquamarine) · [Postcard](https://github.com/samucarre/postcard) · [omdrop-awdl](https://github.com/samucarre/omdrop-awdl) · [libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) · [xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | Los programas que han necesitado un cambio, cada uno en su fork y su rama. La carpeta [`forks/`](forks) enlaza cada uno al commit exacto que corre en la máquina y lo explica; qué cambia cada uno: [Las piezas que se han cambiado](#las-piezas-que-se-han-cambiado). |
+| El repositorio de laboratorio (privado) | El diario de cada día, un espejo de cada fichero de configuración y los scripts que reconstruyen el sistema desde cero. |
+| El fork del kernel (privado) | El árbol de Aurora con parches locales, configuraciones y scripts de instalación ([docs/kernel-gpu.md](docs/kernel-gpu.md)). |
+
 ## La máquina
 
 | | |

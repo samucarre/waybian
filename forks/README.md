@@ -1,0 +1,14 @@
+# Forks
+
+Each folder here is a git submodule: a link to one of our forks, pinned to the exact commit that runs on the machine. On GitHub, clicking a folder opens the fork at that commit. Our commits are also kept here as plain patch files in [`../patches/`](../patches), and the story behind each one is in [`../docs/forks.md`](../docs/forks.md).
+
+| Folder | Fork and branch | What it changes | Patches |
+|---|---|---|---|
+| `Waybar` | [samucarre/Waybar](https://github.com/samucarre/Waybar/tree/gtk4-debian13-m3) `gtk4-debian13-m3` | The bar ported to GTK4 (upstream PR Alexays/Waybar#5366) plus fixes: a segfault in `hyprland/workspaces`, module menus, surviving monitor hot-plug, `align` for custom modules, workspace clicks with Hyprland's Lua configuration. | [14](../patches/Waybar) |
+| `aquamarine` | [samucarre/aquamarine](https://github.com/samucarre/aquamarine/tree/hdmi-apple-drm-ext-0.15) `hdmi-apple-drm-ext-0.15` | Hyprland's backend library: a GBM renderer for a DRM card without a render node, which is what the M3's HDMI output is. | [2](../patches/aquamarine) |
+| `postcard` | [samucarre/postcard](https://github.com/samucarre/postcard/tree/debian13-m3) `debian13-m3` | The mail client: Google OAuth with a stored refresh token, IMAP IDLE on older Pythons, an iCloud search quirk, a "group conversations" switch, a WebKit sandbox fix, a reading pane that stays still on click, and the build recipe. | [9](../patches/postcard) |
+| `omdrop-awdl` | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl/tree/discoverable-rapido) `discoverable-rapido` | AirDrop: a faster visible/invisible toggle for the bar's AirDrop button. | [1](../patches/omdrop-awdl) |
+| `libva-v4l2_request` | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request/tree/avd-fixes) `avd-fixes` | The VA‑API driver for the AVD (hardware video decoding); a mirror, no changes of ours. | — |
+| `xdg-desktop-portal-gtk4` | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | The GTK4 file dialogs: Quick Look with the space bar, like the Finder. | [5](../patches/xdg-desktop-portal-gtk4) |
+
+To get the presentation and every fork at once: `git clone --recurse-submodules https://github.com/samucarre/waybian`. The kernel fork is private and is not included.
