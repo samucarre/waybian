@@ -43,7 +43,7 @@ El registro del día a día (cada cambio con su porqué, el espejo de todos los 
 | Trackpad | ✅ | Gestos de tres dedos para cambiar de escritorio. |
 | Wi‑Fi (BCM4388) | ✅ | Firmware extraído de macOS por el instalador (`vendorfw`); los arreglos del initramfs que hicieron falta están en [docs/hardware.md](docs/hardware.md). |
 | Bluetooth | ✅ | Audio y periféricos. |
-| Altavoces | ✅ | Cadena DSP de Asahi (mismo hardware que el 16" M2), vigilados por `speakersafetyd`. |
+| Altavoces | ✅ | Cadena DSP de Asahi para el J516 (asahi-audio 5.0), vigilados por `speakersafetyd`. |
 | Jack de auriculares | ✅ | Salida limitada a −12 dB (el DAC llega a +12 dB si no). |
 | Micrófonos | ✅ | Perfil con beamforming. |
 | Cámara | ✅ | `apple-isp`. |

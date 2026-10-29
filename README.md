@@ -43,7 +43,7 @@ The day-to-day record (every change with its reason, a mirror of every configura
 | Trackpad | ✅ | Three-finger gestures switch workspaces. |
 | Wi‑Fi (BCM4388) | ✅ | Firmware extracted from macOS by the installer (`vendorfw`); see [docs/hardware.md](docs/hardware.md) for the initramfs fixes it needed. |
 | Bluetooth | ✅ | Audio and HID devices. |
-| Speakers | ✅ | Asahi DSP chain (same hardware as the M2 16"), `speakersafetyd` guarding them. |
+| Speakers | ✅ | Asahi's DSP chain for the J516 (asahi-audio 5.0), `speakersafetyd` guarding them. |
 | Headphone jack | ✅ | Output capped at −12 dB (the DAC otherwise reaches +12 dB). |
 | Microphones | ✅ | Beamforming profile. |
 | Camera | ✅ | `apple-isp`. |
