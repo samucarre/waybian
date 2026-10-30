@@ -1,0 +1,242 @@
+From 541f3e46b3520927cd545231fb081de50c6d145e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Sun, 25 Oct 2026 08:16:21 +0100
+Subject: [PATCH 07/10] drm/asahi: g15: renumber the TA/FS stamps before the TA
+ stamp wraps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The TA stamp of render ordinal n is stamp_seed(TA_SEED, n): it steps by
+0x100 and wraps after 0x860000 renders, about six hours of desktop. With
+the stamp_seed() from before commit 7ccdfe85843d ("drm/asahi: wrap G15
+stamps through zero"), which skipped zero and went from 0xffffff00 back
+to 0x100 there, the firmware stopped at render 8781824 with "DAG: Non
+Sequential Stamp Updates seen ... stampValue 0x100" and the GPU was lost
+until reboot. Since that commit the stamps wrap through zero; whether
+the firmware takes that wrap has not been tried.
+
+Add an offset to the render ordinal used for the TA/FS stamps and, when
+g15_stamp_reseed_margin is set, renumber both stamps from their seeds at
+the first publication with nothing in flight inside that margin: write
+the seeds to the user and firmware stamps, reset the engine targets and
+move the offset so the next render counts as ordinal 1, as after boot.
+The offset is taken modulo the 2^24 ordinals after which stamp_seed()
+repeats (STAMP_PERIOD). The stamps then never reach the wrap.
+g15_stamp_base starts the count near the wrap, to test this in seconds
+instead of hours.
+
+Both parameters default to 0, which keeps the stamps exactly as before.
+
+Tested on a J516C, together with the next commit, on integration/aurora
+with the earlier stamp_seed() and the offset taken modulo its period of
+0xffffff ordinals: from g15_stamp_base 2000 renders before the wrap with
+a margin of 1000, the stamps were renumbered at render 1000 and 3003
+renders retired; in desktop use, one boot renumbered at renders 8681824
+and 17363648. On this base, modulo 0xffffff would give the render after
+the first renumbering ordinal 0, whose targets the seeds already meet,
+and the one after the second ordinal -1, a TA target below the seed.
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ drivers/gpu/drm/asahi/asahi_core.rs |  8 +++++
+ drivers/gpu/drm/asahi/g15/encode.rs |  8 +++++
+ drivers/gpu/drm/asahi/g15/engine.rs | 52 +++++++++++++++++++++++++----
+ drivers/gpu/drm/asahi/g15/graph.rs  |  5 +--
+ drivers/gpu/drm/asahi/g15/params.rs | 12 +++++++
+ 5 files changed, 76 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/asahi/asahi_core.rs b/drivers/gpu/drm/asahi/asahi_core.rs
+index 84a9bff28d6d..739103bb579e 100644
+--- a/drivers/gpu/drm/asahi/asahi_core.rs
++++ b/drivers/gpu/drm/asahi/asahi_core.rs
+@@ -161,6 +161,14 @@ fn init(module: &'static kernel::ThisModule) -> impl PinInit<Self, Error> {
+             default: 1024,
+             description: "G15: PB blocks posted above which an idle engine reclaims the PB",
+         },
++        g15_stamp_base: u32 {
++            default: 0,
++            description: "G15 (testing): render ordinal the TA/FS stamps start from; 0 = unchanged",
++        },
++        g15_stamp_reseed_margin: u32 {
++            default: 0,
++            description: "G15: renders before the TA stamp wrap within which TA/FS are renumbered while idle; 0 = off",
++        },
+         g15_early_tiling: u32 {
+             default: 0,
+             description: "G15: advertise FRAGMENT_BARRIERS, mapped to early tiling (slower on 2419)",
+diff --git a/drivers/gpu/drm/asahi/g15/encode.rs b/drivers/gpu/drm/asahi/g15/encode.rs
+index 64aebf325489..4715fe873ba2 100644
+--- a/drivers/gpu/drm/asahi/g15/encode.rs
++++ b/drivers/gpu/drm/asahi/g15/encode.rs
+@@ -69,6 +69,14 @@ pub(crate) const fn stamp_seed(seed: u32, n: u64) -> u32 {
+     seed.wrapping_add((n as u32).wrapping_mul(0x100))
+ }
+ 
++/// Ordinals after which [`stamp_seed`] repeats: 2^32 / 0x100.
++pub(crate) const STAMP_PERIOD: u64 = 1 << 24;
++
++/// Effective render ordinal at which the TA stamp wraps (0xffffff00 -> 0): 0x860000 with the TA
++/// seed. A wrap that skipped zero stopped the firmware ("DAG: Non Sequential Stamp Updates");
++/// the renumbering keeps the stamps away from it. The FS stamp wraps later (0xc30000).
++pub(crate) const RENDER_WRAP: u64 = 0xffffff - (hw::engine::TA_SEED / 0x100) as u64 + 1;
++
+ /// Compute stamp of ordinal `n`.
+ pub(crate) const fn stamp(n: u64) -> u32 {
+     stamp_seed(hw::engine::COMPUTE_SEED, n)
+diff --git a/drivers/gpu/drm/asahi/g15/engine.rs b/drivers/gpu/drm/asahi/g15/engine.rs
+index 80e4a31a7870..4b138961112f 100644
+--- a/drivers/gpu/drm/asahi/g15/engine.rs
++++ b/drivers/gpu/drm/asahi/g15/engine.rs
+@@ -364,6 +364,9 @@ pub(crate) struct Engine {
+     /// Host compute ordinal and draw ordinal of the last publication.
+     pub(crate) ordinal: u64,
+     pub(crate) draw: u64,
++    /// Added to the draw ordinal before computing the TA/FS stamps; moved by
++    /// `renumber_render_stamps()`.
++    pub(crate) stamp_base: u64,
+     /// Newest published receipts, the tail.
+     pub(crate) target: u32,
+     pub(crate) head: u32,
+@@ -411,6 +414,7 @@ pub(crate) fn new() -> Self {
+             shared: None,
+             ordinal: 0,
+             draw: 0,
++            stamp_base: params::stamp_base(),
+             target: 0,
+             head: 0,
+             ta_target: 0,
+@@ -708,6 +712,37 @@ fn publish_prefix(&mut self, job: &Arc<Job>, done: &mut Completions) -> Result {
+         result
+     }
+ 
++    /// Renumbers the TA/FS stamps from their seeds before the TA stamp wraps, after 0x860000
++    /// renders (about six hours of desktop), where the firmware may stop. Only called with
++    /// nothing in flight: the last flight retired with every stamp equal to its target, so both
++    /// queues are idle and the next render waits on exactly the seeds written here.
++    fn renumber_render_stamps(&mut self) -> Result {
++        let margin = params::stamp_reseed_margin();
++        let ordinal = (self.engine.draw + self.engine.stamp_base) % encode::STAMP_PERIOD;
++        if margin == 0 || ordinal + margin < encode::RENDER_WRAP {
++            return Ok(());
++        }
++        let r = &self.graph.render;
++        for (e, seed) in [ids::TA_SEED, ids::FS_SEED].into_iter().enumerate() {
++            r.user_stamp[e].w32(0, seed)?;
++            r.fw_stamp[e].w32(0, seed)?;
++        }
++        // The next render (draw + 1) counts as ordinal 1 again: modulo the period of
++        // `stamp_seed`, whose ordinal 0 is the seeds just written.
++        let period = encode::STAMP_PERIOD;
++        self.engine.stamp_base = (period - self.engine.draw % period) % period;
++        self.engine.ta_target = ids::TA_SEED;
++        self.engine.fs_target = ids::FS_SEED;
++        self.engine.tail_fs = ids::FS_SEED;
++        dev_info!(
++            self.graph.dev.as_ref(),
++            "G15: TA/FS stamps renumbered from the seeds at draw {} (ordinal {:#x})\n",
++            self.engine.draw,
++            ordinal
++        );
++        Ok(())
++    }
++
+     fn publish_prefix_into(&mut self, job: &Arc<Job>, f: &mut Flight) -> Result {
+         // The PB backing is mapped into the job's VM before anything of the prefix is changed.
+         // Nothing is published when that fails, so the error must not be EIO (which reports a
+@@ -715,6 +750,9 @@ fn publish_prefix_into(&mut self, job: &Arc<Job>, f: &mut Flight) -> Result {
+         self.map_pb(&job.vm)
+             .map_err(|e| if e == EIO { EFAULT } else { e })?;
+         let overlap = !self.engine.flights.is_empty();
++        if !overlap {
++            self.renumber_render_stamps()?;
++        }
+         let mut mixed = tuning::MIXED_PREFIX;
+         let mut pf = Prefix {
+             n: self.engine.ordinal,
+@@ -986,7 +1024,7 @@ fn publish_prefix_into(&mut self, job: &Arc<Job>, f: &mut Flight) -> Result {
+             self.engine.head = pf.c_head;
+         }
+         if renders != 0 {
+-            f.ta_target = encode::stamp_seed(ids::TA_SEED, pf.draw);
++            f.ta_target = encode::stamp_seed(ids::TA_SEED, pf.draw + self.engine.stamp_base);
+             self.engine.ta_target = f.ta_target;
+             f.fs_target = pf.last_fs;
+             self.engine.fs_target = pf.last_fs;
+@@ -1265,8 +1303,9 @@ fn prefix_render(
+         let n = pf.draw + 1;
+         let usc = job.queue.usc_base;
+         let ctx = job.slot();
+-        let tta = encode::stamp_seed(ids::TA_SEED, n);
+-        let tfs = encode::stamp_seed(ids::FS_SEED, n);
++        let sn = n + self.engine.stamp_base;
++        let tta = encode::stamp_seed(ids::TA_SEED, sn);
++        let tfs = encode::stamp_seed(ids::FS_SEED, sn);
+         // Early tiling: a later render member after a render of the same prefix whose render
+         // dependencies are fragment-only (FRAGMENT_BARRIERS) and that has no start timestamps
+         // lets its TA wait for the previous TA; its FS still waits for the previous FS, then
+@@ -1365,7 +1404,7 @@ fn prefix_render(
+         } else if early {
+             let b = encode::barrier(
+                 r.fw_stamp[0].va,
+-                encode::stamp_seed(ids::TA_SEED, n - 1),
++                encode::stamp_seed(ids::TA_SEED, sn - 1),
+                 0,
+                 tta,
+                 RENDER_WAIT_UUID,
+@@ -1385,10 +1424,9 @@ fn prefix_render(
+         } else {
+             let mut prev_fs = if pf.prev != Prev::None {
+                 pf.last_fs
+-            } else if n == 1 {
+-                ids::FS_SEED
+             } else {
+-                encode::stamp_seed(ids::FS_SEED, n - 1)
++                // With no offset, ordinal 0 is the FS seed itself (the first render).
++                encode::stamp_seed(ids::FS_SEED, sn - 1)
+             };
+             // Restricted type 0: predecessor render in this prefix, no InitBM/resync.
+             let internal = pf.prev == Prev::Render
+diff --git a/drivers/gpu/drm/asahi/g15/graph.rs b/drivers/gpu/drm/asahi/g15/graph.rs
+index 9a62f25f19a6..e7d1471eb2d8 100644
+--- a/drivers/gpu/drm/asahi/g15/graph.rs
++++ b/drivers/gpu/drm/asahi/g15/graph.rs
+@@ -352,8 +352,9 @@ fn init(&self) -> Result {
+             q.w64(qinfo::UNK_AC, 4)?;
+             self.qstate[e].w32(qstate::CAP, sizes::QUEUE_CAP)?;
+             self.ring[e].fill(0, 0xcc, sizes::QUEUE_CAP as usize * 8)?;
+-            self.user_stamp[e].w32(0, seed[e])?;
+-            self.fw_stamp[e].w32(0, seed[e])?;
++            let start = super::encode::stamp_seed(seed[e], super::params::stamp_base());
++            self.user_stamp[e].w32(0, start)?;
++            self.fw_stamp[e].w32(0, start)?;
+         }
+         init_sched_ctx(&self.sched_ctx)?;
+         init_notifier(&self.notifier, &self.threshold)?;
+diff --git a/drivers/gpu/drm/asahi/g15/params.rs b/drivers/gpu/drm/asahi/g15/params.rs
+index 48d21e45d0ac..340c8dd3a84c 100644
+--- a/drivers/gpu/drm/asahi/g15/params.rs
++++ b/drivers/gpu/drm/asahi/g15/params.rs
+@@ -18,6 +18,18 @@
+ /// updates); this bounds the kernel's staging allocation.
+ pub(crate) const MAX_BINDS: u32 = 1 << 20;
+ 
++/// Render ordinal the TA/FS stamps start from. Only for testing the stamp wrap without hours of
++/// drawing; 0 keeps the stamps exactly as before.
++pub(crate) fn stamp_base() -> u64 {
++    (*module_parameters::g15_stamp_base.value() as u64) % super::encode::STAMP_PERIOD
++}
++
++/// Renders before the TA stamp wrap within which the TA/FS stamps are renumbered from their seeds,
++/// at the first moment with nothing in flight (0: never).
++pub(crate) fn stamp_reseed_margin() -> u64 {
++    *module_parameters::g15_stamp_reseed_margin.value() as u64
++}
++
+ /// Host deadline of a published prefix without progress, ms (at least 100).
+ pub(crate) fn deadline_ms() -> u32 {
+     (*module_parameters::g15_deadline_ms.value()).max(100)
+-- 
+2.53.0
+

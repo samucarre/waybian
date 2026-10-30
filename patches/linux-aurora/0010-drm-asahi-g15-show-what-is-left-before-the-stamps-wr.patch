@@ -1,0 +1,70 @@
+From c3fad65647f0e46223b91fb7a562d2f1a7c3e945 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Thu, 29 Oct 2026 12:29:14 +0100
+Subject: [PATCH 10/10] drm/asahi: g15: show what is left before the stamps
+ wrap in the stats
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a "stamps:" line to asahi-g15/stats with the computes and renders
+the current numbering has left before the compute and TA stamps wrap,
+and both renumbering margins (0: off). A script that limits compute
+work before the wrap can then tell a kernel that renumbers the compute
+stamp from one that does not, and count from the stamp rather than
+from boot (g15_compute_stamp_base moves the start).
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ drivers/gpu/drm/asahi/g15/engine.rs | 12 ++++++++++++
+ drivers/gpu/drm/asahi/g15/poll.rs   | 10 ++++++++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/drivers/gpu/drm/asahi/g15/engine.rs b/drivers/gpu/drm/asahi/g15/engine.rs
+index fb8729a72fc9..3b0636ae7743 100644
+--- a/drivers/gpu/drm/asahi/g15/engine.rs
++++ b/drivers/gpu/drm/asahi/g15/engine.rs
+@@ -740,6 +740,18 @@ fn renumber_due(&self) -> bool {
+         self.render_renumber_due() || self.compute_renumber_due()
+     }
+ 
++    /// Computes and renders the current numbering has left before its compute and TA stamps
++    /// wrap (0 once wrapped), for `asahi-g15/stats`.
++    pub(crate) fn stamps_left(&self) -> (u64, u64) {
++        let period = encode::STAMP_PERIOD;
++        let c = (self.engine.ordinal + self.engine.compute_stamp_base) % period;
++        let r = (self.engine.draw + self.engine.stamp_base) % period;
++        (
++            encode::COMPUTE_WRAP.saturating_sub(c),
++            encode::RENDER_WRAP.saturating_sub(r),
++        )
++    }
++
+     /// Renumbers the TA/FS stamps from their seeds before the TA stamp wraps, after 0x860000
+     /// renders (about six hours of desktop), where the firmware may stop. Only called with
+     /// nothing in flight: the last flight retired with every stamp equal to its target, so both
+diff --git a/drivers/gpu/drm/asahi/g15/poll.rs b/drivers/gpu/drm/asahi/g15/poll.rs
+index 647c503ba550..158abab719b5 100644
+--- a/drivers/gpu/drm/asahi/g15/poll.rs
++++ b/drivers/gpu/drm/asahi/g15/poll.rs
+@@ -724,6 +724,16 @@ pub(crate) fn write_stats(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+             s.hz_ahead
+         )?;
+         self.pools.write_stats(f)?;
++        // What is left before the stamps wrap, and the renumbering margins (0: off).
++        let (compute_left, render_left) = self.stamps_left();
++        writeln!(
++            f,
++            "stamps: compute_left {} compute_margin {} render_left {} render_margin {}",
++            compute_left,
++            params::compute_reseed_margin(),
++            render_left,
++            params::stamp_reseed_margin()
++        )?;
+         writeln!(
+             f,
+             "stage: ta_us {} fs_us {} cdm_us {} span_us {}",
+-- 
+2.53.0
+

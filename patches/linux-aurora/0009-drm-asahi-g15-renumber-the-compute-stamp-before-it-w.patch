@@ -1,0 +1,282 @@
+From 736063aa051282b01eab9bae5af13f5481e24841 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Thu, 29 Oct 2026 12:23:58 +0100
+Subject: [PATCH 09/10] drm/asahi: g15: renumber the compute stamp before it
+ wraps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The compute stamp of ordinal n is stamp_seed(COMPUTE_SEED, n): it steps
+by 0x100 from 0xc1000000 and, after 0x3f0000 computes (4128768: about
+390 FLUX.3 1024x1024 images at one node per submission), goes from
+0xffffff00 back to 0. Whether the firmware takes that wrap has not been
+tried either; the TA/FS renumbering of the previous commits does not
+cover it.
+
+Renumber the compute stamp the same way. Add an offset to the compute
+ordinal used for the stamp and, when g15_compute_reseed_margin is set,
+at the first publication with nothing in flight inside that margin
+write the compute stamps back as ComputeGraph::init() leaves them with
+no stamp base (user COMPUTE_SEED, firmware 0), reset the compute target
+and move the offset so the next compute counts as ordinal 1. Inside the
+margin nothing is published behind a flight, as for TA/FS, so the
+flights drain; the margin is at least one prefix of computes
+(COMPUTE_SLOTS) and at most half the stamp range. The ordinal itself,
+which the compute image also carries, keeps counting as the render draw
+does.
+
+g15_compute_stamp_base starts the count near the wrap, to test this in
+seconds instead of hours. Both parameters default to 0, which keeps the
+stamp exactly as before.
+
+On a J516C, with g15_compute_stamp_base=4023768 (105000 computes before
+the wrap) and g15_compute_reseed_margin=100000, the stamp was renumbered
+at compute 5000, the GPU kept running computes up to 159899, past the
+point where the stamp would have wrapped, and a FLUX.3 1024x1024 image
+generated fine afterwards.
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ drivers/gpu/drm/asahi/asahi_core.rs |  8 +++++
+ drivers/gpu/drm/asahi/g15/encode.rs | 11 ++++--
+ drivers/gpu/drm/asahi/g15/engine.rs | 55 ++++++++++++++++++++++++++---
+ drivers/gpu/drm/asahi/g15/graph.rs  |  3 +-
+ drivers/gpu/drm/asahi/g15/params.rs | 20 +++++++++++
+ 5 files changed, 88 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/asahi/asahi_core.rs b/drivers/gpu/drm/asahi/asahi_core.rs
+index 739103bb579e..8797d75bca1a 100644
+--- a/drivers/gpu/drm/asahi/asahi_core.rs
++++ b/drivers/gpu/drm/asahi/asahi_core.rs
+@@ -169,6 +169,14 @@ fn init(module: &'static kernel::ThisModule) -> impl PinInit<Self, Error> {
+             default: 0,
+             description: "G15: renders before the TA stamp wrap within which TA/FS are renumbered while idle; 0 = off",
+         },
++        g15_compute_stamp_base: u32 {
++            default: 0,
++            description: "G15 (testing): compute ordinal the compute stamp starts from; 0 = unchanged",
++        },
++        g15_compute_reseed_margin: u32 {
++            default: 0,
++            description: "G15: computes before the compute stamp wrap within which it is renumbered while idle; 0 = off",
++        },
+         g15_early_tiling: u32 {
+             default: 0,
+             description: "G15: advertise FRAGMENT_BARRIERS, mapped to early tiling (slower on 2419)",
+diff --git a/drivers/gpu/drm/asahi/g15/encode.rs b/drivers/gpu/drm/asahi/g15/encode.rs
+index 4715fe873ba2..a62cca8613b3 100644
+--- a/drivers/gpu/drm/asahi/g15/encode.rs
++++ b/drivers/gpu/drm/asahi/g15/encode.rs
+@@ -77,6 +77,10 @@ pub(crate) const fn stamp_seed(seed: u32, n: u64) -> u32 {
+ /// the renumbering keeps the stamps away from it. The FS stamp wraps later (0xc30000).
+ pub(crate) const RENDER_WRAP: u64 = 0xffffff - (hw::engine::TA_SEED / 0x100) as u64 + 1;
+ 
++/// Compute ordinal at which the compute stamp wraps (0xffffff00 -> 0): 0x3f0000 (4128768
++/// computes) with the compute seed, where the firmware may stop as at the TA stamp wrap.
++pub(crate) const COMPUTE_WRAP: u64 = STAMP_PERIOD - (hw::engine::COMPUTE_SEED / 0x100) as u64;
++
+ /// Compute stamp of ordinal `n`.
+ pub(crate) const fn stamp(n: u64) -> u32 {
+     stamp_seed(hw::engine::COMPUTE_SEED, n)
+@@ -109,8 +113,9 @@ pub(crate) struct ComputeRefs {
+     pub(crate) scratch: [u64; 5],
+ }
+ 
+-/// Encodes compute command `c` as ordinal `n`. The engine copies the result into the slot
+-/// after zeroing the slot's images.
++/// Encodes compute command `c` as ordinal `n` with stamp `t` (the engine's renumbering moves
++/// the stamp off [`stamp`]`(n)`). The engine copies the result into the slot after zeroing the
++/// slot's images.
+ #[allow(clippy::too_many_arguments)]
+ pub(crate) fn encode_compute(
+     r: &ComputeRefs,
+@@ -120,12 +125,12 @@ pub(crate) fn encode_compute(
+     ts_va: &[u64; 2],
+     ctx: u32,
+     n: u64,
++    t: u32,
+     fault_mask: u32,
+     w: &mut [u8; compute::WORK_SIZE],
+     q: &mut [u8; compute::SEQ_SIZE],
+ ) {
+     let (wv, qv, h, pre) = (r.work, r.qinfo, r.hwdata, r.preempt_gva);
+-    let t = stamp(n);
+     let att_count = att.len().min(hw::sizes::MAX_ATTACHMENTS);
+     // The saved-state pointers into the preemption buffer and the two 0x1c words; a SoC
+     // encoded "fresh" carries zero in all six, as a first command does.
+diff --git a/drivers/gpu/drm/asahi/g15/engine.rs b/drivers/gpu/drm/asahi/g15/engine.rs
+index 2f5b016f0d6a..fb8729a72fc9 100644
+--- a/drivers/gpu/drm/asahi/g15/engine.rs
++++ b/drivers/gpu/drm/asahi/g15/engine.rs
+@@ -367,6 +367,9 @@ pub(crate) struct Engine {
+     /// Added to the draw ordinal before computing the TA/FS stamps; moved by
+     /// `renumber_render_stamps()`.
+     pub(crate) stamp_base: u64,
++    /// Added to the compute ordinal before computing the compute stamp; moved by
++    /// `renumber_compute_stamps()`.
++    pub(crate) compute_stamp_base: u64,
+     /// Newest published receipts, the tail.
+     pub(crate) target: u32,
+     pub(crate) head: u32,
+@@ -415,6 +418,7 @@ pub(crate) fn new() -> Self {
+             ordinal: 0,
+             draw: 0,
+             stamp_base: params::stamp_base(),
++            compute_stamp_base: params::compute_stamp_base(),
+             target: 0,
+             head: 0,
+             ta_target: 0,
+@@ -564,9 +568,9 @@ pub(crate) fn publish(&mut self, done: &mut Completions) -> Result {
+                 break;
+             };
+             let job = self.engine.pending[index].clone();
+-            // Inside the renumbering margin nothing is published behind a flight: the flights
++            // Inside a renumbering margin nothing is published behind a flight: the flights
+             // drain and the next publication renumbers the stamps while idle (once every ~8.7M
+-            // renders with a margin of 100000).
++            // renders or ~4.0M computes with margins of 100000).
+             let renumber_due = self.renumber_due();
+             if let Some(tail) = self.engine.flights.last() {
+                 if self.engine.flights.len() >= max_inflight
+@@ -718,18 +722,30 @@ fn publish_prefix(&mut self, job: &Arc<Job>, done: &mut Completions) -> Result {
+     }
+ 
+     /// The TA stamp is inside its renumbering margin.
+-    fn renumber_due(&self) -> bool {
++    fn render_renumber_due(&self) -> bool {
+         let margin = params::stamp_reseed_margin();
+         let ordinal = (self.engine.draw + self.engine.stamp_base) % encode::STAMP_PERIOD;
+         margin != 0 && ordinal + margin >= encode::RENDER_WRAP
+     }
+ 
++    /// The compute stamp is inside its renumbering margin.
++    fn compute_renumber_due(&self) -> bool {
++        let margin = params::compute_reseed_margin();
++        let ordinal = (self.engine.ordinal + self.engine.compute_stamp_base) % encode::STAMP_PERIOD;
++        margin != 0 && ordinal + margin >= encode::COMPUTE_WRAP
++    }
++
++    /// Either stamp is inside its renumbering margin.
++    fn renumber_due(&self) -> bool {
++        self.render_renumber_due() || self.compute_renumber_due()
++    }
++
+     /// Renumbers the TA/FS stamps from their seeds before the TA stamp wraps, after 0x860000
+     /// renders (about six hours of desktop), where the firmware may stop. Only called with
+     /// nothing in flight: the last flight retired with every stamp equal to its target, so both
+     /// queues are idle and the next render waits on exactly the seeds written here.
+     fn renumber_render_stamps(&mut self) -> Result {
+-        if !self.renumber_due() {
++        if !self.render_renumber_due() {
+             return Ok(());
+         }
+         let ordinal = (self.engine.draw + self.engine.stamp_base) % encode::STAMP_PERIOD;
+@@ -754,6 +770,33 @@ fn renumber_render_stamps(&mut self) -> Result {
+         Ok(())
+     }
+ 
++    /// Renumbers the compute stamp from its seed before it wraps, after 0x3f0000 computes,
++    /// where the firmware may stop. Like the TA/FS renumbering only with nothing in flight: the
++    /// compute queue is idle with both stamps at its target. The stamps are written back as
++    /// `ComputeGraph::init()` leaves them with no stamp base, so the next compute is ordinal 1
++    /// on the stamps of a fresh boot.
++    fn renumber_compute_stamps(&mut self) -> Result {
++        if !self.compute_renumber_due() {
++            return Ok(());
++        }
++        let ordinal = (self.engine.ordinal + self.engine.compute_stamp_base) % encode::STAMP_PERIOD;
++        let g = &self.graph.compute;
++        g.user_stamp.w32(0, ids::COMPUTE_SEED)?;
++        g.fw_stamp.w32(0, 0)?;
++        // The next compute (ordinal + 1) counts as ordinal 1 again.
++        let period = encode::STAMP_PERIOD;
++        self.engine.compute_stamp_base = (period - self.engine.ordinal % period) % period;
++        self.engine.target = 0;
++        self.engine.tail_ct = 0;
++        dev_info!(
++            self.graph.dev.as_ref(),
++            "G15: compute stamp renumbered from the seed at compute {} (ordinal {:#x})\n",
++            self.engine.ordinal,
++            ordinal
++        );
++        Ok(())
++    }
++
+     fn publish_prefix_into(&mut self, job: &Arc<Job>, f: &mut Flight) -> Result {
+         // The PB backing is mapped into the job's VM before anything of the prefix is changed.
+         // Nothing is published when that fails, so the error must not be EIO (which reports a
+@@ -763,6 +806,7 @@ fn publish_prefix_into(&mut self, job: &Arc<Job>, f: &mut Flight) -> Result {
+         let overlap = !self.engine.flights.is_empty();
+         if !overlap {
+             self.renumber_render_stamps()?;
++            self.renumber_compute_stamps()?;
+         }
+         let mut mixed = tuning::MIXED_PREFIX;
+         let mut pf = Prefix {
+@@ -1171,7 +1215,7 @@ fn prefix_compute(
+         later_render: bool,
+     ) -> Result {
+         let n = pf.n + 1;
+-        let t = encode::stamp(n);
++        let t = encode::stamp(n + self.engine.compute_stamp_base);
+         let ctx = job.slot();
+         let ts = &cmd.timestamps;
+         let mut lap = Lap::start();
+@@ -1215,6 +1259,7 @@ fn prefix_compute(
+             ts,
+             ctx,
+             n,
++            t,
+             tuning::COMPUTE_FAULT_MASK,
+             image(w)?,
+             image(q)?,
+diff --git a/drivers/gpu/drm/asahi/g15/graph.rs b/drivers/gpu/drm/asahi/g15/graph.rs
+index e7d1471eb2d8..18680fd05596 100644
+--- a/drivers/gpu/drm/asahi/g15/graph.rs
++++ b/drivers/gpu/drm/asahi/g15/graph.rs
+@@ -251,7 +251,8 @@ fn init(&self) -> Result {
+         q.w64(qinfo::UNK_AC, 4)?;
+         self.qstate.w32(qstate::CAP, sizes::QUEUE_CAP)?;
+ 
+-        self.user_stamp.w32(0, engine::COMPUTE_SEED)?;
++        let start = super::encode::stamp(super::params::compute_stamp_base());
++        self.user_stamp.w32(0, start)?;
+         self.fw_stamp.w32(0, 0)
+     }
+ }
+diff --git a/drivers/gpu/drm/asahi/g15/params.rs b/drivers/gpu/drm/asahi/g15/params.rs
+index e585b82ba0c7..858cec0a291c 100644
+--- a/drivers/gpu/drm/asahi/g15/params.rs
++++ b/drivers/gpu/drm/asahi/g15/params.rs
+@@ -38,6 +38,26 @@ pub(crate) fn stamp_reseed_margin() -> u64 {
+     }
+ }
+ 
++/// Compute ordinal the compute stamp starts from. Only for testing the stamp wrap without
++/// millions of computes; 0 keeps the stamp exactly as before.
++pub(crate) fn compute_stamp_base() -> u64 {
++    (*module_parameters::g15_compute_stamp_base.value() as u64) % super::encode::STAMP_PERIOD
++}
++
++/// Computes before the compute stamp wrap within which the compute stamp is renumbered from its
++/// seed, at the first moment with nothing in flight (0: never). At least one prefix of computes,
++/// so that the last prefix published outside the margin cannot cross the wrap; at most half the
++/// stamp range.
++pub(crate) fn compute_reseed_margin() -> u64 {
++    match *module_parameters::g15_compute_reseed_margin.value() as u64 {
++        0 => 0,
++        m => m.clamp(
++            hw::sizes::COMPUTE_SLOTS as u64,
++            super::encode::COMPUTE_WRAP / 2,
++        ),
++    }
++}
++
+ /// Host deadline of a published prefix without progress, ms (at least 100).
+ pub(crate) fn deadline_ms() -> u32 {
+     (*module_parameters::g15_deadline_ms.value()).max(100)
+-- 
+2.53.0
+

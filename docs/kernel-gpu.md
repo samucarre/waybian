@@ -21,7 +21,7 @@
 | `7.2.11-waybian-0.8` (29 Oct) | Aurora of 29 Oct | same | The 0.7 patches rebased. |
 | `7.2.11-waybian-0.9` (29 Oct, **default**) | same as 0.8 | same | The GPU stays powered through suspend (its firmware is never restarted), so the machine sleeps and wakes with the GPU running. |
 
-Four of the local patches are proposed upstream, as pull requests to Aurora from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (list in [forks.md](forks.md#kernel-patches-proposed-upstream)).
+Several of the local patches are proposed upstream (eight pull requests as of 30 Oct 2026), from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (list in [forks.md](forks.md#kernel-patches-proposed-upstream)).
 
 Build: `make -C linux O=build ... -j6` under `nice` (the machine is in use while it builds): an incremental build takes about two minutes on the M3 Max; the first full build with BTF (0.3: new compiler and debug information) took 36 minutes. Install script: modules, `/boot/aurora/{vmlinuz,initrd.img,System.map,config}-<version>`, a GRUB entry with its own id in `/etc/grub.d/40_custom`, the per-version AVD firmware, and it prints the `grub-editenv … next_entry=<id>` line for a one-shot test. `predeterminada` makes it the default; `deshacer` removes all of it.
 

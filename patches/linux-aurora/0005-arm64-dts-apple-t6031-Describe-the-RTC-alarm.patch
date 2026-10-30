@@ -1,0 +1,95 @@
+From 8fda9340edeedd6a39c8b5a92add2cbb819977ee Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Thu, 29 Oct 2026 10:32:21 +0100
+Subject: [PATCH] arm64: dts: apple: t6031: Describe the RTC alarm
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The J516C's primary Chapel PMU (ADT /arm-io/nub-spmi0/spmi-chapelL1-b,
+is-primary) keeps its RTC alarm where the T6030 one does:
+info-rtc_alarm_ctrl 0x2000 (enable mask 0x40, event mask 0x2, monitor
+mask 0x1), info-rtc_alarm_offset 0x2008 and info-rtc_irq_mask_offset
+0x200e (mask value 1), next to info-rtc 0x2002 and the 0x2100 offset
+cell already described. It raises peripheral interrupt 2 (interrupts =
+<2>) of nub-spmi0 (interrupt-parent), which is the controller at
+0x2a1014000.
+
+Make the controller an interrupt controller, add the alarm cells to the
+PMIC layout and give them, the interrupt and wakeup-source to the SMC
+RTC, as t6030.dtsi does, so a timer can wake the system. The 4-byte
+compare cell and the rising-edge type are not in the ADT: the PMU alarm
+driver reads a 32-bit compare value and the SPMI controller takes only
+rising edges. The SPMI binding already requires the interrupt-controller
+and #interrupt-cells properties of an apple,t6031-spmi controller, which
+today's node lacks, so this also fixes that schema violation.
+
+Tested on an M3 Max J516C whose live tree had these same properties
+(its boot loader's device tree predates them, so a local patch added
+them at boot from the ADT): rtcwake -s 30 woke suspend-to-idle through
+the alarm in 6 of 6 runs. Only the J516C ADT was read; J514C, T6032 and
+T6034 include this file and were not checked. With these cells the PMU
+alarm driver writes to them at probe, to disarm the alarm, on every board
+that includes this file.
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ arch/arm64/boot/dts/apple/t6031-die0.dtsi | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/apple/t6031-die0.dtsi b/arch/arm64/boot/dts/apple/t6031-die0.dtsi
+index 47d868a323e8..7bc4286bac9b 100644
+--- a/arch/arm64/boot/dts/apple/t6031-die0.dtsi
++++ b/arch/arm64/boot/dts/apple/t6031-die0.dtsi
+@@ -241,6 +241,8 @@ nub_spmi: spmi@2a1014000 {
+ 		#size-cells = <0>;
+ 		interrupt-parent = <&aic>;
+ 		interrupts = <AIC_IRQ 0 723 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-controller;
++		#interrupt-cells = <2>;
+ 
+ 		pmic1: pmic@b {
+ 			compatible = "apple,chapel-pmic", "apple,spmi-nvmem";
+@@ -251,10 +253,22 @@ nvmem-layout {
+ 				#address-cells = <1>;
+ 				#size-cells = <1>;
+ 
++				rtc_ctrl: rtc-ctrl@2000 {
++					reg = <0x2000 0x1>;
++				};
++
+ 				pm_setting: pm-setting@2001 {
+ 					reg = <0x2001 0x1>;
+ 				};
+ 
++				rtc_alarm: rtc-alarm@2008 {
++					reg = <0x2008 0x4>;
++				};
++
++				rtc_alarm_mask: rtc-alarm-mask@200e {
++					reg = <0x200e 0x1>;
++				};
++
+ 				rtc_offset: rtc-offset@2100 {
+ 					reg = <0x2100 0x6>;
+ 				};
+@@ -365,8 +379,13 @@ smc_reboot: reboot {
+ 
+ 		rtc {
+ 			compatible = "apple,smc-rtc";
+-			nvmem-cells = <&rtc_offset>;
+-			nvmem-cell-names = "rtc_offset";
++			nvmem-cells = <&rtc_offset>, <&rtc_ctrl>, <&rtc_alarm>,
++				<&rtc_alarm_mask>;
++			nvmem-cell-names = "rtc_offset", "rtc_ctrl", "rtc_alarm",
++				"rtc_alarm_mask";
++			/* The PMIC's RTC alarm, peripheral interrupt 2 of nub-spmi0 */
++			interrupts-extended = <&nub_spmi 2 IRQ_TYPE_EDGE_RISING>;
++			wakeup-source;
+ 		};
+ 	};
+ 
+-- 
+2.53.0
+

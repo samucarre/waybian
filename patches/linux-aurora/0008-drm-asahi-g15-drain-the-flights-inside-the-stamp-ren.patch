@@ -1,0 +1,111 @@
+From 6f7e3df42fab1b281920405cb9faab0b9affeddc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Sun, 25 Oct 2026 15:15:52 +0100
+Subject: [PATCH 08/10] drm/asahi: g15: drain the flights inside the stamp
+ renumbering margin
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Renumbering only happens at a publication with nothing in flight. A
+client that keeps the GPU busy (no vsync) can keep a flight in the air
+through the whole margin, and the TA stamp would then wrap as before.
+Inside the margin, publish nothing behind a flight, so the flights drain
+and the next publication renumbers while idle (once every ~8.7M renders
+with a margin of 100000).
+
+Also clamp a non-zero margin to at least one prefix of renders, so that
+the last prefix published outside it cannot cross the wrap, and to at
+most half the stamp range, so that it cannot renumber on every
+publication.
+
+Found while reviewing the previous commit, with a model of prefixes of
+1-8 renders: a fully overlapped client wrapped 199/199 times without
+this and 0/199 with it. On a J516C, with the earlier stamp_seed() (see
+the previous commit), from g15_stamp_base 500000 renders before the
+wrap with a margin of 100000 and the GPU kept busy (286875 publications
+behind a flight), the stamps were renumbered at render 400000 and
+rendering went on past the wrap point to render 526113.
+
+Generated-by: LLM
+Signed-off-by: Samuel Carreño <soyminero11yt@gmail.com>
+---
+ drivers/gpu/drm/asahi/g15/engine.rs | 17 ++++++++++++++---
+ drivers/gpu/drm/asahi/g15/params.rs | 12 ++++++++++--
+ 2 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/asahi/g15/engine.rs b/drivers/gpu/drm/asahi/g15/engine.rs
+index 4b138961112f..2f5b016f0d6a 100644
+--- a/drivers/gpu/drm/asahi/g15/engine.rs
++++ b/drivers/gpu/drm/asahi/g15/engine.rs
+@@ -564,12 +564,17 @@ pub(crate) fn publish(&mut self, done: &mut Completions) -> Result {
+                 break;
+             };
+             let job = self.engine.pending[index].clone();
++            // Inside the renumbering margin nothing is published behind a flight: the flights
++            // drain and the next publication renumbers the stamps while idle (once every ~8.7M
++            // renders with a margin of 100000).
++            let renumber_due = self.renumber_due();
+             if let Some(tail) = self.engine.flights.last() {
+                 if self.engine.flights.len() >= max_inflight
+                     || !Arc::ptr_eq(&job.vm, &tail.job.vm)
+                     || self.recovery.reinit
+                     || self.recovery.fs_resync
+                     || self.engine.rebuild_live
++                    || renumber_due
+                 {
+                     self.engine.stats.hold[0] += (self.engine.flights.len() >= max_inflight) as u64;
+                     break;
+@@ -712,16 +717,22 @@ fn publish_prefix(&mut self, job: &Arc<Job>, done: &mut Completions) -> Result {
+         result
+     }
+ 
++    /// The TA stamp is inside its renumbering margin.
++    fn renumber_due(&self) -> bool {
++        let margin = params::stamp_reseed_margin();
++        let ordinal = (self.engine.draw + self.engine.stamp_base) % encode::STAMP_PERIOD;
++        margin != 0 && ordinal + margin >= encode::RENDER_WRAP
++    }
++
+     /// Renumbers the TA/FS stamps from their seeds before the TA stamp wraps, after 0x860000
+     /// renders (about six hours of desktop), where the firmware may stop. Only called with
+     /// nothing in flight: the last flight retired with every stamp equal to its target, so both
+     /// queues are idle and the next render waits on exactly the seeds written here.
+     fn renumber_render_stamps(&mut self) -> Result {
+-        let margin = params::stamp_reseed_margin();
+-        let ordinal = (self.engine.draw + self.engine.stamp_base) % encode::STAMP_PERIOD;
+-        if margin == 0 || ordinal + margin < encode::RENDER_WRAP {
++        if !self.renumber_due() {
+             return Ok(());
+         }
++        let ordinal = (self.engine.draw + self.engine.stamp_base) % encode::STAMP_PERIOD;
+         let r = &self.graph.render;
+         for (e, seed) in [ids::TA_SEED, ids::FS_SEED].into_iter().enumerate() {
+             r.user_stamp[e].w32(0, seed)?;
+diff --git a/drivers/gpu/drm/asahi/g15/params.rs b/drivers/gpu/drm/asahi/g15/params.rs
+index 340c8dd3a84c..e585b82ba0c7 100644
+--- a/drivers/gpu/drm/asahi/g15/params.rs
++++ b/drivers/gpu/drm/asahi/g15/params.rs
+@@ -25,9 +25,17 @@ pub(crate) fn stamp_base() -> u64 {
+ }
+ 
+ /// Renders before the TA stamp wrap within which the TA/FS stamps are renumbered from their seeds,
+-/// at the first moment with nothing in flight (0: never).
++/// at the first moment with nothing in flight (0: never). At least one prefix of renders, so
++/// that the last prefix published outside the margin cannot cross the wrap; at most half the
++/// stamp range.
+ pub(crate) fn stamp_reseed_margin() -> u64 {
+-    *module_parameters::g15_stamp_reseed_margin.value() as u64
++    match *module_parameters::g15_stamp_reseed_margin.value() as u64 {
++        0 => 0,
++        m => m.clamp(
++            hw::tuning::PREFIX_RENDERS as u64,
++            super::encode::RENDER_WRAP / 2,
++        ),
++    }
+ }
+ 
+ /// Host deadline of a published prefix without progress, ms (at least 100).
+-- 
+2.53.0
+
