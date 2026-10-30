@@ -18,7 +18,7 @@ GTK3 cannot be removed from the system (47 packages depend on it, Chrome among t
 | aquamarine (patched) | Hyprland's DRM/GBM backend | — | **built from our fork** | GBM renderer for the HDMI card without a render node |
 | Waybar (GTK4 port) | bar + widgets | GTK4 / gtkmm 4 (Vulkan) | **built from our fork** | upstream is GTK3; Debian's 0.15 package stays installed but unused |
 | fuzzel 1.15 | launcher | Wayland native (no toolkit) | Debian 14 | replaced wofi (GTK3) |
-| mako 1.11 | notifications | Wayland native | Debian 14 | |
+| SwayNotificationCenter (swaync) 0.12.6 | notification centre | GTK4 + libadwaita (Cairo for now) | Debian 14 | replaced mako: popups like mako's (same corner and colours), plus a panel with the history, Do Not Disturb and the media player, opened from a bell in the bar ([desktop.md](desktop.md#bar-waybar-on-gtk4)); started with `GSK_RENDERER=cairo` (GTK's CPU renderer) for now |
 | kitty 0.48 | terminal | OpenGL | Debian 14 | |
 | greetd + tuigreet, custom greeter | login | CPU on purpose | Debian 14 + our scripts | must work without the GPU |
 | hyprlock, hypridle, hyprpicker, hyprpolkitagent | lock, idle, picker, polkit | OpenGL / Wayland | Debian 14 | |

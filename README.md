@@ -134,7 +134,8 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | Hyprland 0.56 | compositor | OpenGL | Debian 14 |
 | aquamarine (patched) | DRM/GBM backend | — | **built from our fork** |
 | Waybar (GTK4 port) | bar and widgets | GTK4 (Vulkan) | **built from our fork** |
-| fuzzel · mako · swaybg | launcher · notifications · wallpaper | Wayland native | Debian 14 |
+| fuzzel · swaybg | launcher · wallpaper | Wayland native | Debian 14 |
+| SwayNotificationCenter (swaync) 0.12 | notification centre | GTK4 (Cairo for now) | Debian 14 |
 | kitty 0.48 | terminal | OpenGL | Debian 14 |
 | greetd + tuigreet + own greeter | login | CPU on purpose | Debian 14 + ours |
 | hyprlock · hypridle · hyprpicker · hyprpolkitagent | lock, idle, picker, polkit | OpenGL / Wayland | Debian 14 |

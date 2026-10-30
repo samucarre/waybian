@@ -134,7 +134,8 @@ La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la
 | Hyprland 0.56 | compositor | OpenGL | Debian 14 |
 | aquamarine (parcheada) | backend DRM/GBM | — | **compilada de nuestro fork** |
 | Waybar (port a GTK4) | barra y botones | GTK4 (Vulkan) | **compilada de nuestro fork** |
-| fuzzel · mako · swaybg | lanzador · avisos · fondo | Wayland nativo | Debian 14 |
+| fuzzel · swaybg | lanzador · fondo | Wayland nativo | Debian 14 |
+| SwayNotificationCenter (swaync) 0.12 | centro de notificaciones | GTK4 (Cairo de momento) | Debian 14 |
 | kitty 0.48 | terminal | OpenGL | Debian 14 |
 | greetd + tuigreet + greeter propio | inicio de sesión | CPU a propósito | Debian 14 + nuestro |
 | hyprlock · hypridle · hyprpicker · hyprpolkitagent | bloqueo, inactividad, cuentagotas, polkit | OpenGL / Wayland | Debian 14 |
