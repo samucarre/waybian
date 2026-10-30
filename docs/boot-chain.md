@@ -49,7 +49,7 @@ Debian ships `m1n1`, `u-boot-asahi` and `asahi-platform`, built for M1/M2. Their
 
 ## GRUB layout
 
-The entries live in `/etc/grub.d/40_custom`, each with its own `--id`, so `update-grub` (which runs whenever the grub packages are upgraded) rebuilds this menu instead of dropping it. `10_linux` and the other generators that add entries by themselves are disabled, and the default is chosen by id (`GRUB_DEFAULT="waybian-0.4"` in `/etc/default/grub.d/`), because indexes change when an entry is added.
+The entries live in `/etc/grub.d/40_custom`, each with its own `--id`, so `update-grub` (which runs whenever the grub packages are upgraded) rebuilds this menu instead of dropping it. `10_linux` and the other generators that add entries by themselves are disabled, and the default is chosen by id (`GRUB_DEFAULT="waybian-0.11"` in `/etc/default/grub.d/`), because indexes change when an entry is added.
 
 | Entry (id) | Kernel | Purpose |
 |---|---|---|

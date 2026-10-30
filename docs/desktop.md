@@ -31,6 +31,10 @@ Upstream Waybar is GTK3; the GTK4 port (upstream PR #5366) plus local fixes (a s
   <sub>The mini music player: cover, seek bar, search, queue, recent albums, playlists, shuffle.</sub>
 </p>
 <p align="center">
+  <img src="../images/notification-centre.jpg" alt="The bell in the bar and the notification centre panel" width="400"><br>
+  <sub>The notification centre: the bell is blue while the panel holds notifications (these are test ones, with the texts WayBian's own scripts send).</sub>
+</p>
+<p align="center">
   <img src="../images/keyboard-backlight.png" alt="Keyboard backlight panel" width="400"><br>
   <sub>The keyboard backlight: the M3 keyboard has no keys for it, so a bar widget opens this slider.</sub>
 </p>
