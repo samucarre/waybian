@@ -18,7 +18,7 @@ This repository is the **presentation** of the project: what it is, how it works
 
 The day-to-day record (every change with its reason, a mirror of every configuration file, patches, and the scripts that rebuild the system from scratch) lives in a separate private repository, `waybian-lab`. Ask if you need something from it.
 
-> **Status (30 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.10`. Expect rough edges.
+> **Status (30 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.11`. Expect rough edges.
 
 ## Repositories
 
@@ -86,7 +86,7 @@ The Asahi installer is used in its **"UEFI environment only"** mode: it shrinks 
 
 ## Kernel and GPU
 
-- **Kernel "WayBian 0.10"**: Aurora Silicon's `integration/aurora` branch (Linux 7.2.11, state of 30 Oct 2026, with the M3 Pro suspend work of #274 merged) plus local patches (panel brightness on this board, external HDMI on the `apple-drm-ext` card, GPU stamp renumbering so that long GPU compute runs no longer hang the GPU, suspend ported from an open Aurora pull request for the M3 Pro, and the GPU kept powered through suspend), 16 KiB pages, with BTF and without SELinux, built locally. GRUB keeps Asahi's 7.1.13 as an emergency entry and the previous kernels as fallbacks; new kernels are tried once through `grub-reboot` before becoming the default (0.3 was the exception: GRUB ignored `next_entry` until its image was rebuilt).
+- **Kernel "WayBian 0.11"**: Aurora Silicon's `integration/aurora` branch (Linux 7.2.11, state of 30 Oct 2026, with the M3 Pro suspend work of #274 and this project's J516C brightness and GPU stamp pull requests merged) plus local patches (panel brightness on this board, external HDMI on the `apple-drm-ext` card, GPU stamp renumbering so that long GPU compute runs no longer hang the GPU, suspend ported from an open Aurora pull request for the M3 Pro, and the GPU kept powered through suspend), 16 KiB pages, with BTF and without SELinux, built locally. GRUB keeps Asahi's 7.1.13 as an emergency entry and the previous kernels as fallbacks; new kernels are tried once through `grub-reboot` before becoming the default (0.3 was the exception: GRUB ignored `next_entry` until its image was rebuilt).
 - **GPU**: the M3 is a new GPU generation (G15) that Asahi does not drive yet. Before adopting Aurora's driver, the author ported an experimental driver for another M3 variant to the G15C up to stable compute jobs (33 debugging rounds in a day); the lessons are in [docs/kernel-gpu.md](docs/kernel-gpu.md). Today: "Apple M3 Max (G15C B2)", 40 cores in 4 clusters, OpenGL 4.6 and Vulkan 1.4, Hyprland with real acceleration.
 - **Video decode**: the AVD firmware is free software (`aurora-silicon/avd-fw`), built locally and installed per kernel version.
 

@@ -1,6 +1,6 @@
 # Hardware, component by component
 
-State on 30 Oct 2026 with kernel `7.2.11-waybian-0.10`. "Fix" means something that had to be done on top of Debian 14 and the upstream kernel to make it work on this board (`j516c`).
+State on 30 Oct 2026 with kernel `7.2.11-waybian-0.11`. "Fix" means something that had to be done on top of Debian 14 and the upstream kernel to make it work on this board (`j516c`).
 
 ## Display
 
