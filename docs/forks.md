@@ -84,7 +84,7 @@ No commits of ours: a mirror.
 
 ### xdg-desktop-portal-gtk4: Quick Look in the GTK4 file dialogs
 
-Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `b369398` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
+Fork [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian), branch `waybian` (its default branch), pinned at `08b7199` as `forks/xdg-desktop-portal-gtk4`. Base: mahkoh/xdg-desktop-portal-gtk4 master (`2372e15`).
 
 | # | Date | Commit | Patch |
 |---|---|---|---|
