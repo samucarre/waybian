@@ -62,7 +62,8 @@ The entries live in `/etc/grub.d/40_custom`, each with its own `--id`, so `updat
 | `waybian-0.5`, `waybian-0.6` | `7.2.11-waybian-0.5`, `-0.6` | GPU scheduling experiments, not kept |
 | `waybian-0.7` | `7.2.11-waybian-0.7` | 0.4 + suspend + GPU stamp fixes |
 | `waybian-0.8` | `7.2.11-waybian-0.8` | the same on Aurora of 29 Oct |
-| `waybian-0.9` (**default**) | `7.2.11-waybian-0.9` | 0.8 + GPU kept powered through suspend |
+| `waybian-0.9` | `7.2.11-waybian-0.9` | 0.8 + GPU kept powered through suspend |
+| `waybian-0.10` (**default**) | `7.2.11-waybian-0.10` | the same on Aurora of 30 Oct |
 
 Kernels under test get entries of their own in the same way. Any new kernel is installed as a new entry and tried **once** with `grub-reboot` (`next_entry` in `grubenv`, by id): if it hangs, the next reboot returns by itself to the previous default. Only after checking GPU, display, audio and camera does it become `GRUB_DEFAULT`.
 

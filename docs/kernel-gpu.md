@@ -19,7 +19,8 @@
 | `7.2.11-waybian-0.5`, `0.6` (28 Oct) | same as 0.4 | same | GPU scheduling experiments; not kept (0.6 lost the GPU under a long compute run). |
 | `7.2.11-waybian-0.7` (29 Oct) | same as 0.4 | same | Suspend-to-idle ported from an open Aurora pull request for the M3 Pro (`omacom/linux-aurora#274`) and adapted to this board; the GPU's compute stamp is renumbered while idle before it wraps (a long GPU compute run, about 390 FLUX images, used to hang the GPU until reboot); the render stamps' renumbering now works on every wrap, not only the first. |
 | `7.2.11-waybian-0.8` (29 Oct) | Aurora of 29 Oct | same | The 0.7 patches rebased. |
-| `7.2.11-waybian-0.9` (29 Oct, **default**) | same as 0.8 | same | The GPU stays powered through suspend (its firmware is never restarted), so the machine sleeps and wakes with the GPU running. |
+| `7.2.11-waybian-0.9` (29 Oct) | same as 0.8 | same | The GPU stays powered through suspend (its firmware is never restarted), so the machine sleeps and wakes with the GPU running. |
+| `7.2.11-waybian-0.10` (30 Oct, **default**) | Aurora of 30 Oct (#274 merged, M3 Pro HDMI audio, eGPU over USB4) | same | The 0.9 patches rebased: the suspend patches now upstream are dropped, the rest use the versions sent as pull requests. Suspend with the GPU tested again (three out of three). |
 
 Several of the local patches are proposed upstream (eight pull requests as of 30 Oct 2026), from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (list in [forks.md](forks.md#kernel-patches-proposed-upstream)).
 
