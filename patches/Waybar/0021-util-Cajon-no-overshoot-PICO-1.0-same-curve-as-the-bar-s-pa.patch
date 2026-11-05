@@ -1,0 +1,44 @@
+From 41e5ed562baeead576c53fadfc980b229b21a971 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <samucarre@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 11:55:02 +0100
+Subject: [PATCH 21/21] util/Cajon: no overshoot (PICO = 1.0), same curve as
+ the bar's panels and the notification center
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013Fj1pDmXVTEisPZxhYu6xF
+---
+ include/util/cajon.hpp | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/include/util/cajon.hpp b/include/util/cajon.hpp
+index 7115726..e177deb 100644
+--- a/include/util/cajon.hpp
++++ b/include/util/cajon.hpp
+@@ -56,6 +56,9 @@ class Cajon : public Base {
+ 
+  private:
+   static constexpr double DURACION = 0.7;  // s
++  // peak of the first leg: 1.0 = no overshoot (3-nov-2026, Samuel: the panels' 5 % bounce had to go; same in
++  // perfilado.py and swaync's cajon.vala)
++  static constexpr double PICO = 1.0;
+ 
+   static bool animaciones() {
+     auto settings = Gtk::Settings::get_default();
+@@ -78,11 +81,11 @@ class Cajon : public Base {
+     return cy(t);
+   }
+ 
+-  // scaleY 0.12 → 1.05 → 1, the two legs of the "suave" bounce (p = progress 0..1)
++  // scaleY 0.12 → PICO → 1, the two legs of the "suave" curve (p = progress 0..1)
+   static double escalaSuave(double p) {
+     if (p >= 1) return 1.0;
+-    if (p < 0.6) return 0.12 + (1.05 - 0.12) * bezier(p / 0.6, .33, .9, .35, 1);
+-    return 1.05 + (1.0 - 1.05) * bezier((p - 0.6) / 0.4, .33, .9, .35, 1);
++    if (p < 0.6) return 0.12 + (PICO - 0.12) * bezier(p / 0.6, .33, .9, .35, 1);
++    return PICO + (1.0 - PICO) * bezier((p - 0.6) / 0.4, .33, .9, .35, 1);
+   }
+ 
+   bool anima(const Glib::RefPtr<Gdk::FrameClock>& clock) {
+-- 
+2.53.0
+

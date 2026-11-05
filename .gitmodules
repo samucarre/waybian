@@ -28,3 +28,7 @@
 	branch = integration/aurora
 	update = none
 	shallow = true
+[submodule "forks/SwayNotificationCenter"]
+	path = forks/SwayNotificationCenter
+	url = https://github.com/samucarre/SwayNotificationCenter.git
+	branch = debian13-m3

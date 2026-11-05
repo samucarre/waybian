@@ -23,7 +23,7 @@ Power on with nothing pressed boots Debian (the installer set it as default). Ho
 
 The official Asahi installer supports this board (`j516cap`) since 15 Sep 2026 and offers **"UEFI environment only (m1n1 + U‑Boot + ESP)"**. That is the only thing it is used for. It:
 
-1. shrinks the macOS APFS container (it left macOS ~875 GiB; macOS has 521.5 GiB since the Linux root was enlarged, last on 28 Oct 2026; a local Time Machine snapshot has to be deleted first or the container refuses to shrink by a single byte);
+1. shrinks the macOS APFS container (it left macOS ~875 GiB; macOS has 363.2 GiB since the Linux root was enlarged, last on 4 Nov 2026 ([hardware.md](hardware.md#storage)); a local Time Machine snapshot has to be deleted first or the container refuses to shrink by a single byte);
 2. creates a **stub APFS container** (~2.5 GB) with a minimal macOS 14.8.3 that provides iBoot2 and the peripheral firmware, and installs m1n1 inside it as the "kernel";
 3. creates an **ESP** (FAT32, ~500 MB) with `m1n1/boot.bin`, U‑Boot and `vendorfw/` (Wi‑Fi/Bluetooth/trackpad firmware extracted from macOS);
 4. leaves free space for the Linux root.
@@ -45,34 +45,37 @@ Worst case (very unlikely, since the system firmware is never touched) is a DFU 
 
 Debian ships `m1n1`, `u-boot-asahi` and `asahi-platform`, built for M1/M2. Their post-install hook (`zz-update-m1n1`) regenerates `boot.bin` with a m1n1 that does not know the M3, which would leave the Mac unable to boot Linux. They are blocked with `apt-mark hold` plus an apt pin, and `/etc/default/update-m1n1` has `M1N1_UPDATE_DISABLED=1` as a second lock.
 
-`boot.bin` is rebuilt by hand only when a new kernel brings new device trees (m1n1 + the kernel's DTBs + U‑Boot, gzip-concatenated), and the previous `boot.bin` is always kept next to it. Since 25 Oct 2026 it also carries the WayBian logo and a 3 s U‑Boot timeout.
+`boot.bin` is rebuilt by hand only when a new kernel brings new device trees (m1n1 + the kernel's DTBs + U‑Boot, gzip-concatenated), and the previous `boot.bin` is always kept next to it. Since 25 Oct 2026 it also carries the WayBian logo and a 3 s U‑Boot timeout. The current one ("F", 2 Nov 2026) is the same recipe with the device tree of kernel 0.13, which adds the line that lets the Wi‑Fi driver pass the country to the Broadcom firmware (Aurora #311) and describes the RTC alarm (#285); the previous one ("E") stays on the ESP as `m1n1/boot.bin.E`, the way back if F did not boot. Kernels 0.13 and 0.14 should also boot with E (not tried): the country would then not reach the firmware, and the kernel would describe the RTC alarm from Apple's ADT as before. The install script finds the ESP by its PARTUUID rather than by partition number: its first run stopped itself because the ESP had become `p5` when the root was merged on 28 Oct (partition numbers move whenever partitions are added or removed, as they did again on 4 Nov).
 
 ## GRUB layout
 
-The entries live in `/etc/grub.d/40_custom`, each with its own `--id`, so `update-grub` (which runs whenever the grub packages are upgraded) rebuilds this menu instead of dropping it. `10_linux` and the other generators that add entries by themselves are disabled, and the default is chosen by id (`GRUB_DEFAULT="waybian-0.11"` in `/etc/default/grub.d/`), because indexes change when an entry is added.
+The entries live in `/etc/grub.d/40_custom`, each with its own `--id`, so `update-grub` (which runs whenever the grub packages are upgraded) rebuilds this menu instead of dropping it. `10_linux` and the other generators that add entries by themselves are disabled, and the default is chosen by id (`GRUB_DEFAULT="waybian-0.14"` in `/etc/default/grub.d/`), because indexes change when an entry is added.
+
+Since 2 Nov 2026 the menu keeps the three latest WayBian kernels plus the fallbacks; 0.1–0.11 were removed with the install script's `deshacer` (the whole lineage is in [kernel-gpu.md](kernel-gpu.md#kernel-lineage)):
 
 | Entry (id) | Kernel | Purpose |
 |---|---|---|
+| `waybian-0.14` (**default**) | `7.2.11-waybian-0.14` | Aurora of 2 Nov: 0.13 + the panel framebuffer fix (#325) |
+| `waybian-0.13` | `7.2.11-waybian-0.13` | Aurora of 1 Nov + 21 local patches |
+| `waybian-0.12` | `7.2.11-waybian-0.12` | 0.11 + the 1000-nit brightness ceiling |
 | `asahi-7.1.13`, `asahi-7.1.13-texto` | Asahi `asahi` branch 7.1.13 (Fedora Asahi 16k config) | emergency, graphical or text mode: no GPU, but boots whatever happens |
-| `aurora-j516c` | `7.2.11-aurora-j516c` | Aurora kernel with the first local patches |
-| `waybian-0.1` | `7.2.11-waybian-0.1` | Aurora of 25 Oct + local patches |
-| `waybian-0.2` | `7.2.11-waybian-0.2` | Aurora of 26 Oct + 7 local patches |
-| `waybian-0.3` | `7.2.11-waybian-0.3` | same base, BTF on and SELinux off |
-| `waybian-0.4` | `7.2.11-waybian-0.4` | Aurora of 28 Oct + local patches |
-| `waybian-0.5`, `waybian-0.6` | `7.2.11-waybian-0.5`, `-0.6` | GPU scheduling experiments, not kept |
-| `waybian-0.7` | `7.2.11-waybian-0.7` | 0.4 + suspend + GPU stamp fixes |
-| `waybian-0.8` | `7.2.11-waybian-0.8` | the same on Aurora of 29 Oct |
-| `waybian-0.9` | `7.2.11-waybian-0.9` | 0.8 + GPU kept powered through suspend |
-| `waybian-0.10` | `7.2.11-waybian-0.10` | the same on Aurora of 30 Oct |
-| `waybian-0.11` (**default**) | `7.2.11-waybian-0.11` | on Aurora of 30 Oct evening, with #259 and #287 merged |
+| `aurora-j516c` | `7.2.11-aurora-j516c` | the first Aurora kernel, kept as an old fallback |
 
 Kernels under test get entries of their own in the same way. Any new kernel is installed as a new entry and tried **once** with `grub-reboot` (`next_entry` in `grubenv`, by id): if it hangs, the next reboot returns by itself to the previous default. Only after checking GPU, display, audio and camera does it become `GRUB_DEFAULT`.
 
-The GRUB image in the ESP (`EFI/BOOT/BOOTAA64.EFI`) was rebuilt on 27 Oct 2026 with GRUB 2.14 and the `loadenv` module. The one made for Debian 13 (GRUB 2.12) did not carry `loadenv`: one-shot boots worked while the hand-written menu loaded it with `insmod`, but with the menu generated by `update-grub` (27 Oct) `next_entry` was silently ignored and every boot went to the default. The previous image stays next to it as a way back. The menu uses a 44 px font made with `grub-mkfont` (the stock one is tiny at 3456×2234), and Debian's GRUB theme is disabled: its background image showed an error in red for an instant.
+The GRUB image in the ESP (`EFI/BOOT/BOOTAA64.EFI`) was rebuilt on 27 Oct 2026 with GRUB 2.14 and the `loadenv` module. The one made for Debian 13 (GRUB 2.12) did not carry `loadenv`: one-shot boots worked while the hand-written menu loaded it with `insmod`, but with the menu generated by `update-grub` (27 Oct) `next_entry` was silently ignored and every boot went to the default. The previous image stays next to it as a way back.
+
+**Theme.** Without a theme GRUB draws its menu as a text console in the top-left corner, with a frame, and a lower resolution is not an option: U‑Boot offers only one mode, a 3456×2160 framebuffer (not the panel's full 3456×2234). Since 2 Nov 2026 a WayBian gfxmenu theme (`/boot/grub/themes/waybian/`, set with `GRUB_THEME`) draws a dark background, the WayBian logo, the menu centred in DejaVu Sans fonts made with `grub-mkfont` (the selected entry in bold on a highlight band) and a countdown at the bottom. The 44 px font of 27 Oct (the stock one is tiny at 3456×2160) stays for GRUB's console, and Debian's own theme stays disabled: its background image showed an error in red for an instant. The titles were shortened to fit (`WayBian 0.14 · predeterminada`), and the install script writes new entries with a short title too. The size took a few reboots to settle (the first version, at twice the old size, 88 px, was far too large; the menu ended at 30 px) until a preview script took over: it builds a standalone GRUB with the theme and the real entries, boots it in QEMU (UEFI firmware, `virtio-gpu` at 3456×2160) and saves a screenshot once the menu is drawn, in about 10 s with KVM. Two theme gotchas: positions only work as percentages (a mixed `50%-600` put the logo off to the right), and the selection band can overlap the next entry: its corner pieces set its minimum height (twice their size), and it measures `item_height + 2·item_padding + 4` while entries are `item_height + item_spacing` apart, so `item_spacing` must be at least `2·item_padding + 4`.
+
+<p align="center">
+  <img src="../images/grub.jpg" alt="GRUB with the WayBian theme" width="700"><br>
+  <sub>The real GRUB with the theme, captured in QEMU at the boot framebuffer's resolution, 3456×2160 (<code>previsualizar-grub.sh</code>).</sub>
+</p>
 
 Kernel command line, besides the root by UUID:
 
 - `quiet loglevel=3` — the camera driver (`apple-isp`) dumps debug output on the console and would overwrite the login prompt.
+- `appledrm.panel_nits_max=1000` — since kernel 0.12, raises the panel's brightness ceiling from 500 to 1000 nits (a local patch; see [hardware.md](hardware.md#display)).
 - `firmware_class.path=/lib/firmware/vendor` — where the extracted Apple firmware lands; without it the Wi‑Fi and trackpad firmware are not found.
 - `deferred_probe_timeout=10` — the USB‑C controllers (`cd321x`) wait for a USB4 driver that does not exist; the timeout lets USB 3 come up anyway.
 

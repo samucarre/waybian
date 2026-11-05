@@ -1,0 +1,114 @@
+From ec9bb8ba7b0962511026aa88964b007d5956e8b0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Thu, 29 Oct 2026 22:48:39 +0100
+Subject: [PATCH] Schedule shapes without 149 and a quiet supervisor during
+ transfers (BCM4388, infra on DFS 60)
+
+With the home Wi-Fi on channel 60 (a channel AWDL never visits), the dense
+shape gave only 6 of 16 slots to 44 and a 104 MB upload from an iPhone was
+reset after 25-29 s at ~1.9 MB/s (issue #18). Adds the shapes sin149, ancha
+and apple50 to awdl-up and mkpsf.py (the two lists must match); with
+chan-shape = ancha (11 slots on 44, 4 for infra) the same upload takes ~5 s
+at 23-25 MB/s with wlan0 still associated. While a TCP connection on awdl0
+is established (:8771 receive, :8770 send) the supervisor skips the 40-frame
+advert burst and election tracking, which can rewrite the template.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013Fj1pEP8d7mFC4cuFkJYdV
+---
+ userspace/awdl-up             |  9 ++++++++-
+ userspace/mkpsf.py            |  4 ++++
+ userspace/omdrop-discoverable | 22 +++++++++++++++++++++-
+ 3 files changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/userspace/awdl-up b/userspace/awdl-up
+index df88ceb..f80d502 100755
+--- a/userspace/awdl-up
++++ b/userspace/awdl-up
+@@ -86,13 +86,20 @@ template_loaded(){ [[ $(iovar_bytes awdl_payload 512) -gt 0 ]]; }
+ # re-apply path so the two can never drift.
+ apply_schedule(){
+   local SEQ SYNC
++  # Locales (29-oct-2026): formas sin el 149, que en España no usa ningún Apple (van al 44). sin149 = dense con
++  # sus dos ranuras del 149 en el canal del par; ancha = 11 de 16 ranuras en el 44 y 4 para la infra, para un
++  # Wi-Fi de casa en un canal que AWDL no visita; apple50 = el estado Data+Infra 50 % de MobiCom 2018.
++  # Las mismas listas están en mkpsf.py (slots_for) y tienen que coincidir.
+   SEQ=$(python3 -c "
+ import sys
+ peer, mch, shape = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+ slots={'sparse':[peer,0,149,0,0,0,0,0,mch,0,149,0,0,0,0,0],
+        'dense': [peer,peer,149,0,0,0,0,peer,mch,peer,149,peer,0,0,0,peer],
+        'full':  [peer,peer,149,peer,peer,149,peer,peer,mch,peer,149,peer,peer,149,peer,peer],
+-       'dense44':[peer,peer,149,peer,peer,peer,peer,peer,mch,peer,149,peer,peer,peer,peer,peer]}[shape]
++       'dense44':[peer,peer,149,peer,peer,peer,peer,peer,mch,peer,149,peer,peer,peer,peer,peer],
++       'sin149': [peer,peer,peer,0,0,0,0,peer,mch,peer,peer,peer,0,0,0,peer],
++       'ancha':  [peer,peer,peer,peer,0,0,peer,peer,mch,peer,peer,peer,peer,0,0,peer],
++       'apple50':[peer,peer,peer,peer,0,0,0,0,mch,peer,peer,peer,0,0,0,0]}[shape]
+ oc={0:0,1:81,6:81,11:81,36:128,40:128,44:128,48:128,149:128,153:128,157:128,161:128}
+ print((bytes([15,3,0,3])+(0xffff).to_bytes(2,'little')+b''.join(bytes([c,oc[c]]) for c in slots)).hex())" "$PCH" "$MCH" "$SHAPE")
+   SYNC=$(python3 -c "
+diff --git a/userspace/mkpsf.py b/userspace/mkpsf.py
+index e5b6bd4..e8083c8 100755
+--- a/userspace/mkpsf.py
++++ b/userspace/mkpsf.py
+@@ -62,6 +62,10 @@ def slots_for(peer, mch, shape):
+             # re-derive their sequence over time, so this is a moving target:
+             # re-read the peer's chan_seq before trusting it.
+             'mirror': [peer, 0, 149, 0, 0, 149, peer, peer, mch, 0, 149, 0, 0, 149, peer, peer],
++            # Locales (29-oct-2026), las mismas que en awdl-up (apply_schedule): tienen que coincidir.
++            'sin149': [peer, peer, peer, 0, 0, 0, 0, peer, mch, peer, peer, peer, 0, 0, 0, peer],
++            'ancha': [peer, peer, peer, peer, 0, 0, peer, peer, mch, peer, peer, peer, peer, 0, 0, peer],
++            'apple50': [peer, peer, peer, peer, 0, 0, 0, 0, mch, peer, peer, peer, 0, 0, 0, 0],
+             }[shape]
+ 
+ def configured_slots():
+diff --git a/userspace/omdrop-discoverable b/userspace/omdrop-discoverable
+index e21590b..a068a8e 100755
+--- a/userspace/omdrop-discoverable
++++ b/userspace/omdrop-discoverable
+@@ -97,6 +97,9 @@ rx_watch(){
+ 
+ rx_mark(){ printf '%s' "$1" > "$RUN/rx_proven"; }
+ 
++# Local (29-oct-2026): un archivo está pasando por awdl0 (el receptor en :8771 o un envío al :8770 del par).
++transfer_live(){ ss -Htn state established '( sport = :8771 or dport = :8770 )' 2>/dev/null | grep -q '%awdl0'; }
++
+ # The window's state, as the moved radio code reports it (omdrop-broadcom.sh,
+ # "the radio backend hooks"): why a start failed, and the receive proof's reset
+ # and baseline, taken where the gate decides the radio transmits.
+@@ -179,7 +182,7 @@ same_process(){
+ supervise(){
+   # $1 was the deadline at spawn; it is deliberately not bound, because the
+   # loop below re-reads $RUN/until so a later press can move it.
+-  local secs=$2 seq=0
++  local secs=$2 seq=0 quiet=0
+   is_duration "$secs" || die 2 "__supervise: seconds must be a number"
+   echo $$ > "$RUN/supervisor"
+   trap 'kill_children; printf stopped > "$RUN/reason"; rm -f "$RUN/until"; exit 0' TERM INT
+@@ -213,6 +216,23 @@ supervise(){
+   while deadline=$(cat "$RUN/until" 2>/dev/null) && is_uint "$deadline" \
+         && { [[ $deadline == 0 ]] || [[ $(now) -lt $deadline ]]; }; do
+     seq=$(( seq + 1 ))
++    # Local (29-oct-2026): mientras pasa un archivo, ni la ráfaga de 40 anuncios ni el seguimiento de la
++    # elección (que puede reescribir la plantilla): comparten anillo y ranuras con nuestros ACK hacia el
++    # iPhone, y una subida de 104 MB se cortaba a la mitad. El enlace se sigue reparando como en radio_tick.
++    if transfer_live; then
++      (( quiet )) || log "transfer in flight: adverts and election tracking paused"
++      quiet=1
++      if ! ip -6 addr show dev "$IF" scope link 2>/dev/null | grep -q inet6; then
++        ip link set "$IF" up 2>/dev/null
++        ip link set "$IF" promisc on 2>/dev/null
++        ip link set "$IF" allmulticast on 2>/dev/null
++      fi
++      rx_watch
++      sleep 2 & wait $!
++      continue
++    fi
++    (( quiet )) && log "transfer finished: adverts and election tracking resumed"
++    quiet=0
+     radio_tick
+     # The gate opens on transmit alone; this is where the receive half earns
+     # its claim, without any start paying for the measurement.
+-- 
+2.53.0
+

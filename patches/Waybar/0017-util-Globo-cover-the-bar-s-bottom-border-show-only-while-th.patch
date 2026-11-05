@@ -1,0 +1,99 @@
+From 13b2574ad48f8b2f0b444994666f7039e22c38f9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <samucarre@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 09:56:19 +0100
+Subject: [PATCH 17/21] util/Globo: cover the bar's bottom border; show only
+ while the pointer is over the widget
+
+gap() now subtracts the bar window's bottom border width, so a popup (tooltip or
+menu) hanging from the bar climbs over the bar's border line: the popup's own
+outline carries that line on around itself instead of the line cutting across
+the top of the popup. Bars without a bottom border are unaffected.
+
+show() checks that the pointer really is over the anchor widget (device position
+on the bar surface). GTK re-sends an "enter" to the widget under the pointer's
+last known position in the bar when a popup menu releases its grab, although
+the pointer has long moved elsewhere; a tooltip shown on that stale enter stayed
+on screen with nothing to take it away.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013Fj1pDmXVTEisPZxhYu6xF
+---
+ include/util/globo.hpp |  4 +++-
+ src/util/globo.cpp     | 31 +++++++++++++++++++++++++++++--
+ 2 files changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/include/util/globo.hpp b/include/util/globo.hpp
+index f263364..37fe2e0 100644
+--- a/include/util/globo.hpp
++++ b/include/util/globo.hpp
+@@ -21,12 +21,14 @@ class Globo : public sigc::trackable {
+   void leave();    // pointer left: cancel and hide
+   void hide();     // hide now (click, destruction)
+   void refresh();  // the text changed: update the popup if it is visible
+-  // Pixels between the bottom edge of `w` and the bottom edge of its window.
++  // Pixels between the bottom edge of `w` and the bottom edge of its window, minus the window's bottom border:
++  // a popup offset by this hangs from the bar's edge and covers the bar's border line.
+   static int gap(Gtk::Widget& w);
+   Gtk::Widget& anchor() const { return anchor_; }
+ 
+  private:
+   void show();
++  bool pointerInside() const;  // is the pointer really over the anchor right now?
+   Gtk::Widget& anchor_;
+   std::function<Glib::ustring()> markup_;
+   std::unique_ptr<Gtk::Popover> pop_;
+diff --git a/src/util/globo.cpp b/src/util/globo.cpp
+index 163e60e..6ec38dc 100644
+--- a/src/util/globo.cpp
++++ b/src/util/globo.cpp
+@@ -41,8 +41,13 @@ int Globo::gap(Gtk::Widget& w) {
+   if (root == nullptr) return 0;
+   graphene_rect_t b;
+   if (!gtk_widget_compute_bounds(w.gobj(), GTK_WIDGET(root), &b)) return 0;
+-  const int h = gtk_widget_get_height(GTK_WIDGET(root)) - static_cast<int>(std::lround(b.origin.y + b.size.height));
+-  return h > 0 ? h : 0;
++  int h = gtk_widget_get_height(GTK_WIDGET(root)) - static_cast<int>(std::lround(b.origin.y + b.size.height));
++  if (h < 0) h = 0;
++  // Climb over the bar's bottom border (its "line", when the CSS draws one): the popup's own outline carries that
++  // line on around itself instead of the bar's line cutting across the top of the popup.
++  GtkBorder border;
++  gtk_style_context_get_border(gtk_widget_get_style_context(GTK_WIDGET(root)), &border);
++  return h - border.bottom;
+ }
+ 
+ void Globo::enter() {
+@@ -80,9 +85,31 @@ void Globo::refresh() {
+   }
+ }
+ 
++bool Globo::pointerInside() const {
++  // GTK re-sends an "enter" to the widget under the pointer's LAST position in the bar when a popup (a module menu)
++  // releases its grab, although the pointer has long moved elsewhere; a tooltip shown on that stale enter would stay
++  // on screen with nothing to take it away. So a tooltip only shows if the pointer really is over the widget now.
++  GtkWidget* w = anchor_.gobj();
++  GtkNative* native = gtk_widget_get_native(w);
++  GdkSurface* surface = native != nullptr ? gtk_native_get_surface(native) : nullptr;
++  GdkSeat* seat = gdk_display_get_default_seat(gtk_widget_get_display(w));
++  GdkDevice* pointer = seat != nullptr ? gdk_seat_get_pointer(seat) : nullptr;
++  if (surface == nullptr || pointer == nullptr) return true;  // unknown: trust the crossing events
++  double sx = 0, sy = 0;
++  GdkModifierType mask;
++  if (!gdk_surface_get_device_position(surface, pointer, &sx, &sy, &mask)) return false;  // not over the bar
++  double nx = 0, ny = 0;
++  gtk_native_get_surface_transform(native, &nx, &ny);
++  graphene_point_t p = GRAPHENE_POINT_INIT(static_cast<float>(sx - nx), static_cast<float>(sy - ny));
++  graphene_point_t out;
++  if (!gtk_widget_compute_point(GTK_WIDGET(native), w, &p, &out)) return true;
++  return gtk_widget_contains(w, out.x, out.y);
++}
++
+ void Globo::show() {
+   const auto text = markup_();
+   if (text.empty()) return;
++  if (!pointerInside()) return;
+   if (!pop_) {
+     pop_ = std::make_unique<Gtk::Popover>();
+     pop_->set_parent(anchor_);
+-- 
+2.53.0
+

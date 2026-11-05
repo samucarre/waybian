@@ -1,0 +1,60 @@
+From bb16541462ddd0b52c703d2a4e1700ed494089d9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Sun, 1 Nov 2026 20:54:58 +0100
+Subject: [PATCH 12/16] fix: stop message bodies from rendering blank
+
+Two cases left the reading pane empty under the header:
+
+- A message that sets `html, body {height: 100%}` (some receipts and
+  newsletters) made the root as tall as the 1px viewport it is
+  measured in, so the body was sized to 1px. When the root is exactly
+  viewport-tall, its scrollHeight is taken instead.
+- A body taller than the GPU's buffer limit (16384 device pixels) failed
+  to allocate ("Failed to create GBM buffer") and stayed blank. The view
+  now stops growing at that height and scrolls the rest itself.
+---
+ src/postcard/message_view.py | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/src/postcard/message_view.py b/src/postcard/message_view.py
+index 4baf20c..bc6ab94 100644
+--- a/src/postcard/message_view.py
++++ b/src/postcard/message_view.py
+@@ -35,9 +35,23 @@ AVATAR_SIZE = 40
+ # A body is as tall as its content, so the reader pane is the only scroller.
+ # The root element is a block formatting context, so its box holds floats and
+ # the body's margins, unlike scrollHeight, which never drops below the viewport.
+-MEASURE_BODY = "document.documentElement.getBoundingClientRect().height"
++# But a message that sets `html, body {height: 100%}` (PayPal's receipts do)
++# makes the root exactly as tall as the 1px viewport it is measured in, however
++# long the body is. A root that tall took its height from the viewport, not its
++# content, so its scrollHeight -- the content's extent -- is the height instead.
++MEASURE_BODY = """(() => {
++    const root = document.documentElement;
++    const height = root.getBoundingClientRect().height;
++    const isViewportTall = Math.abs(height - window.innerHeight) < 1;
++    return isViewportTall ? Math.max(height, root.scrollHeight) : height;
++})()"""
+ # Used only if measuring fails, so the body never collapses to nothing.
+ FALLBACK_BODY_HEIGHT = 800
++# The web process draws the whole view into one GPU buffer, and a GPU allocates
++# none taller than its texture limit -- 16384 pixels on most -- so a long
++# newsletter came out blank ("Failed to create GBM buffer"). A body that long
++# stops growing there and scrolls the rest of itself.
++MAX_BUFFER_PIXELS = 16384
+ # Let a window drag settle before reloading a body reflowed by the new width.
+ RELOAD_DELAY_MS = 100
+ 
+@@ -389,7 +403,8 @@ class MessageView(Gtk.Box):
+                 exc_info=True,
+             )
+             height = FALLBACK_BODY_HEIGHT
+-        webview.body_height = height
++        max_height = MAX_BUFFER_PIXELS // max(webview.get_scale_factor(), 1)
++        webview.body_height = min(height, max_height)
+         webview.queue_resize()
+ 
+     def _on_dark_changed(self, _manager: Adw.StyleManager, _pspec: object) -> None:
+-- 
+2.53.0
+

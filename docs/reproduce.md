@@ -24,7 +24,7 @@ Every change is recorded in three places in the lab repository:
 2. `config/`: a mirror of each touched file at its real path (`config/home` = `~`, `config/etc`, `config/usr`).
 3. `desde-cero/`: package lists (apt, backports, pip, npm), systemd units to enable, dconf/gsettings values, external apps (repositories or GitHub releases with checksums), MCP servers, and `aplicar.sh`, an idempotent script with three verbs: `comprobar` (diff the live system against the mirror and report what is missing), `aplicar` (install packages and apps, copy the files with their permissions, enable units, apply settings, reload the desktop) and `actualizar-espejo` (refresh the mirror from the live system).
 
-`aplicar.sh` never touches the kernel, GRUB, initramfs or the ESP: those remain manual, documented steps (`instalar-kernel-waybian.sh <version>`, `instalar-bootbin.sh <letter>`, with a one-shot GRUB entry first). Programs built locally (Waybar, aquamarine, Postcard, the portal, libva, Mesa) are rebuilt from their forks with `compilados.sh compilar <name>`.
+`aplicar.sh` never touches the kernel, GRUB, initramfs or the ESP: those remain manual, documented steps (`instalar-kernel-waybian.sh <version>`, `instalar-bootbin.sh <letter>`, with a one-shot GRUB entry first). Programs built locally (Waybar, aquamarine, Postcard, the portal, swaync, libva, Mesa, and mpvpaper from upstream) are rebuilt from their forks with `compilados.sh compilar <name>`.
 
 ## Backups
 

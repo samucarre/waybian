@@ -1,0 +1,888 @@
+From c5b8612a7275594eced3dde59e4de978eb40e9ef Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Thu, 5 Nov 2026 13:38:58 +0100
+Subject: [PATCH 16/16] feat: download the whole mailbox in the background
+
+Upstream keeps only the newest 50 messages of each folder, so search and the
+list never see older mail. A worker (backfill.py) now fetches every header of
+every real folder, then every body, newest first, on its own IMAP and SQLite
+connections, and never notifies. Bodies move to their own table (a mid-row
+BLOB made every list walk gigabytes of overflow pages), the list reads the
+database a page at a time and grows on scroll, and regrouping threads is
+skipped while grouping is off.
+---
+ src/meson.build                     |   1 +
+ src/postcard/backfill.py            | 484 ++++++++++++++++++++++++++++
+ src/postcard/core/store/database.py | 157 ++++++++-
+ src/postcard/window.py              |  56 +++-
+ src/postcard/window_types.py        |   4 +
+ 5 files changed, 681 insertions(+), 21 deletions(-)
+ create mode 100644 src/postcard/backfill.py
+
+diff --git a/src/meson.build b/src/meson.build
+index 9e97c68..6f4685c 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -48,6 +48,7 @@ postcard_sources = [
+   'postcard/tray.py',
+   'postcard/webkit_sandbox.py',
+   'postcard/mail_sync.py',
++  'postcard/backfill.py',
+   'postcard/folder_row.py',
+ ]
+ python_installation.install_sources(postcard_sources, subdir: 'postcard')
+diff --git a/src/postcard/backfill.py b/src/postcard/backfill.py
+new file mode 100644
+index 0000000..d400e75
+--- /dev/null
++++ b/src/postcard/backfill.py
+@@ -0,0 +1,484 @@
++"""Bring every account's whole mailbox down in the background.
++
++Upstream Postcard keeps only the newest page of each folder and fetches the
++rest on scroll, so search and the list only ever see the last few weeks. Here
++a worker thread walks every folder of every account, oldest gaps included:
++first every message's headers (cheap, and enough for the list and search),
++then every body, newest first, so old mail opens at once and offline.
++
++It runs on its own IMAP connection and its own SQLite connection, so neither
++the window's syncs nor the main loop wait on it, and it never notifies: the
++window's own sync stays the only thing that announces new mail. Only messages
++older than the newest one the window already holds are filled in, so a message
++that has just arrived is still the window's to find and announce.
++"""
++
++import json
++import logging
++import os
++import re
++import sqlite3
++import threading
++import time
++from collections.abc import Callable, Iterable, Sequence
++from datetime import datetime
++
++from gi.repository import GLib
++
++from . import mail_sync
++from .core import secrets
++from .core.models.account import Account
++from .core.net.imap_session import ATTR_NOSELECT, STATUS_OK, ImapError, ImapSession
++
++logger = logging.getLogger(__name__)
++
++# Gmail's virtual folders hold copies of mail that lives in a real folder too
++# (All Mail is every message; Important and Starred are subsets): fetching them
++# would store each message twice or three times.
++SKIP_ATTRIBUTES = frozenset(
++    {ATTR_NOSELECT, "\\NonExistent", "\\All", "\\Important", "\\Flagged"}
++)
++
++HEADER_FIELDS = (
++    "(UID FLAGS BODY.PEEK[HEADER.FIELDS "
++    "(DATE FROM TO CC SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES)])"
++)
++HEADERS_PER_FETCH = 500
++SIZES_PER_FETCH = 2000
++# A body fetch is sized by bytes, so a run of large attachments doesn't hold
++# tens of megabytes in memory, nor a write transaction open for long.
++BODY_BYTES_PER_FETCH = 8 * 1024 * 1024
++BODIES_PER_FETCH = 50
++# After a failure (network gone, server busy) wait this long before trying again.
++RETRY_SECONDS = 5 * 60
++# Every sync kicks the worker, and a pass lists every UID of every folder (a
++# megabyte for a large inbox), so once caught up it looks again at most this often.
++MIN_PASS_SECONDS = 10 * 60
++
++STATE_PATH = os.path.join(GLib.get_user_state_dir(), "postcard", "descarga.json")
++
++
++def _uid_set(uids: Sequence[int]) -> str:
++    """Compress UIDs into an IMAP sequence set: [1,2,3,7] -> "1:3,7"."""
++    parts: list[str] = []
++    ordered = sorted(uids)
++    start = prev = ordered[0]
++    for uid in ordered[1:]:
++        if uid == prev + 1:
++            prev = uid
++            continue
++        parts.append(f"{start}:{prev}" if start != prev else str(start))
++        start = prev = uid
++    parts.append(f"{start}:{prev}" if start != prev else str(start))
++    return ",".join(parts)
++
++
++def _chunks[T](items: Sequence[T], size: int) -> Iterable[Sequence[T]]:
++    for start in range(0, len(items), size):
++        yield items[start : start + size]
++
++
++class StoppedError(Exception):
++    """The window is closing, or asked for a fresh start."""
++
++
++class Backfill:
++    """One worker thread for every account, run again on each kick()."""
++
++    def __init__(
++        self,
++        db_path: str,
++        on_progress: Callable[[int], None],
++    ) -> None:
++        self._db_path = db_path
++        # Called on the worker thread with a folder id whenever that folder
++        # gained rows; the window hops to the main loop itself.
++        self._on_progress = on_progress
++        self._wake = threading.Event()
++        self._stop = threading.Event()
++        self._accounts: list[Account] = []
++        self._lock = threading.Lock()
++        self._thread: threading.Thread | None = None
++        self._state: dict[str, dict[str, dict[str, int]]] = {}
++        self._phase = "esperando"
++
++    # --- called from the main loop ---------------------------------------
++
++    def kick(self, accounts: Iterable[Account]) -> None:
++        with self._lock:
++            self._accounts = [a for a in accounts if not a.is_graph]
++        if self._thread is None:
++            self._thread = threading.Thread(
++                target=self._run, name="backfill", daemon=True
++            )
++            self._thread.start()
++        self._wake.set()
++
++    def stop(self) -> None:
++        self._stop.set()
++        self._wake.set()
++
++    # --- the worker -------------------------------------------------------
++
++    def _run(self) -> None:
++        while not self._stop.is_set():
++            self._wake.wait()
++            self._wake.clear()
++            if self._stop.is_set():
++                return
++            with self._lock:
++                accounts = list(self._accounts)
++            try:
++                is_complete = self._pass(accounts)
++            except StoppedError:
++                return
++            except Exception:
++                logger.exception("mailbox download stopped")
++                is_complete = False
++            if self._stop.is_set():
++                return
++            if not is_complete:
++                # Something failed (offline, a server hiccup): try again later
++                # even if no sync kicks us before then.
++                self._stop.wait(RETRY_SECONDS)
++                self._wake.set()
++            else:
++                self._stop.wait(MIN_PASS_SECONDS)
++
++    def _pass(self, accounts: list[Account]) -> bool:
++        """Headers for every account, then bodies. True if nothing failed."""
++        is_complete = True
++        conn = sqlite3.connect(self._db_path, timeout=30)
++        conn.row_factory = sqlite3.Row
++        conn.execute("PRAGMA foreign_keys = ON")
++        try:
++            for phase, work in (
++                ("cabeceras", self._headers),
++                ("cuerpos", self._bodies),
++            ):
++                self._phase = phase
++                for account in accounts:
++                    self._check_stop()
++                    try:
++                        self._with_session(account, conn, work)
++                    except StoppedError:
++                        raise
++                    except Exception:
++                        logger.warning(
++                            "mailbox download (%s) failed for %s",
++                            phase,
++                            account.email,
++                            exc_info=True,
++                        )
++                        is_complete = False
++            self._phase = "hecho" if is_complete else "pendiente (reintenta en 5 min)"
++            self._save_state()
++        finally:
++            conn.close()
++        return is_complete
++
++    def _check_stop(self) -> None:
++        if self._stop.is_set():
++            raise StoppedError()
++
++    def _with_session(
++        self,
++        account: Account,
++        conn: sqlite3.Connection,
++        work: Callable[
++            [Account, ImapSession, sqlite3.Connection, list[tuple[int, str]]], None
++        ],
++    ) -> None:
++        credential = secrets.credential_for(account)
++        if credential is None:
++            raise ImapError(f"no credential for {account.email}")
++        session = mail_sync._signed_in(account, credential)  # noqa: SLF001 -- reuses the sync's own session and parsing
++        try:
++            folders = self._folders(account, session, conn)
++            work(account, session, conn, folders)
++        finally:
++            session.logout()
++
++    def _folders(
++        self, account: Account, session: ImapSession, conn: sqlite3.Connection
++    ) -> list[tuple[int, str]]:
++        """(folder id, mailbox name) of every real folder the window knows."""
++        known = {
++            row["name"]: row["id"]
++            for row in conn.execute(
++                "SELECT id, name FROM folders WHERE account_id = ?", (account.id,)
++            )
++        }
++        folders = []
++        for mailbox in session.list_folders():
++            if mailbox.name in mail_sync.NAMESPACE_ROOTS:
++                continue
++            if SKIP_ATTRIBUTES & {flag.strip() for flag in mailbox.flags.split()}:
++                continue
++            folder_id = known.get(mailbox.name)
++            if folder_id is not None:
++                folders.append((folder_id, mailbox.name))
++        return folders
++
++    def _open(
++        self, session: ImapSession, conn: sqlite3.Connection, folder_id: int, name: str
++    ) -> bool:
++        """Select a folder read-only, if its UIDs still mean what we stored."""
++        exists = session.select(name, True)
++        current = session.uidvalidity()
++        row = conn.execute(
++            "SELECT uidvalidity FROM folders WHERE id = ?", (folder_id,)
++        ).fetchone()
++        if row is None:
++            return False
++        stored = row["uidvalidity"]
++        if stored is None:
++            has_rows = conn.execute(
++                "SELECT 1 FROM emails WHERE folder_id = ? AND server_id != '' LIMIT 1",
++                (folder_id,),
++            ).fetchone()
++            if has_rows:
++                # Rows cached before the value was recorded: the window's next
++                # sync checks them first.
++                return False
++            if current is not None:
++                with conn:
++                    conn.execute(
++                        "UPDATE folders SET uidvalidity = ?"
++                        " WHERE id = ? AND uidvalidity IS NULL",
++                        (current, folder_id),
++                    )
++        elif current is not None and current != stored:
++            return False  # renumbered: the window's sync drops the cache first
++        return exists > 0
++
++    # --- phase 1: headers -------------------------------------------------
++
++    def _headers(
++        self,
++        account: Account,
++        session: ImapSession,
++        conn: sqlite3.Connection,
++        folders: list[tuple[int, str]],
++    ) -> None:
++        for folder_id, name in folders:
++            self._check_stop()
++            if not self._open(session, conn, folder_id, name):
++                continue
++            on_server = {int(uid) for uid in session.search_all_uids()}
++            local = {
++                int(row[0])
++                for row in conn.execute(
++                    "SELECT server_id FROM emails"
++                    " WHERE folder_id = ? AND server_id != ''",
++                    (folder_id,),
++                )
++                if str(row[0]).isdigit()
++            }
++            newest_local = max(local) if local else None
++            missing = sorted(
++                (
++                    uid
++                    for uid in on_server - local
++                    if newest_local is None or uid < newest_local
++                ),
++                reverse=True,
++            )
++            self._note(
++                account, name, servidor=len(on_server), cabeceras=len(on_server & local)
++            )
++            if not missing:
++                continue
++            logger.info("%s %s: fetching %d headers", account.email, name, len(missing))
++            stored = len(on_server & local)
++            for chunk in _chunks(missing, HEADERS_PER_FETCH):
++                self._check_stop()
++                headers = self._fetch_headers(session, chunk)
++                with conn:
++                    conn.executemany(
++                        """
++                        INSERT INTO emails
++                            (folder_id, server_id, sender, subject, preview, date,
++                             unread, starred, message_id, in_reply_to, reference_ids,
++                             sender_address, recipient, recipient_address)
++                        VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?)
++                        ON CONFLICT (folder_id, server_id) DO NOTHING
++                        """,
++                        [
++                            (
++                                folder_id,
++                                h.uid,
++                                h.sender,
++                                h.subject,
++                                h.date,
++                                int(h.is_unread),
++                                int(h.is_starred),
++                                h.message_id,
++                                h.in_reply_to,
++                                h.references,
++                                h.sender_address,
++                                h.recipient,
++                                h.recipient_address,
++                            )
++                            for h in headers
++                        ],
++                    )
++                stored += len(headers)
++                self._note(account, name, cabeceras=stored)
++                self._on_progress(folder_id)
++
++    def _fetch_headers(self, session: ImapSession, uids: Sequence[int]) -> list:
++        status, payload = session._require_imap().uid(  # noqa: SLF001
++            "FETCH", _uid_set(uids), HEADER_FIELDS
++        )
++        if status != STATUS_OK:
++            raise ImapError(f"header fetch failed: {payload}")
++        headers = []
++        for item in payload:
++            if not isinstance(item, tuple):
++                continue
++            meta, header_bytes = item
++            fetched = session._parse(meta.decode("utf-8", "replace"), header_bytes)  # noqa: SLF001 -- reuses the sync's own session and parsing
++            if fetched.uid:
++                headers.append(mail_sync._to_message_header(fetched))  # noqa: SLF001 -- reuses the sync's own session and parsing
++        return headers
++
++    # --- phase 2: bodies --------------------------------------------------
++
++    def _bodies(
++        self,
++        account: Account,
++        session: ImapSession,
++        conn: sqlite3.Connection,
++        folders: list[tuple[int, str]],
++    ) -> None:
++        for folder_id, name in folders:
++            self._check_stop()
++            wanted = {
++                int(row["server_id"]): row["id"]
++                for row in conn.execute(
++                    """
++                    SELECT e.id, e.server_id FROM emails e
++                    LEFT JOIN bodies b ON b.email_id = e.id
++                    WHERE e.folder_id = ? AND e.server_id != '' AND b.email_id IS NULL
++                    """,
++                    (folder_id,),
++                )
++                if str(row["server_id"]).isdigit()
++            }
++            total = conn.execute(
++                "SELECT COUNT(*) FROM emails WHERE folder_id = ? AND server_id != ''",
++                (folder_id,),
++            ).fetchone()[0]
++            self._note(account, name, cuerpos=total - len(wanted))
++            if not wanted or not self._open(session, conn, folder_id, name):
++                continue
++            logger.info("%s %s: fetching %d bodies", account.email, name, len(wanted))
++            done = total - len(wanted)
++            for size_chunk in _chunks(sorted(wanted, reverse=True), SIZES_PER_FETCH):
++                sizes = self._fetch_sizes(session, size_chunk)
++                for batch in self._batches_by_size(size_chunk, sizes):
++                    self._check_stop()
++                    bodies = self._fetch_bodies(session, batch)
++                    with conn:
++                        conn.executemany(
++                            """
++                            INSERT OR IGNORE INTO bodies (email_id, raw)
++                            SELECT id, ? FROM emails WHERE id = ?
++                            """,
++                            [
++                                (raw, wanted[uid])
++                                for uid, raw in bodies.items()
++                                if uid in wanted
++                            ],
++                        )
++                    done += len(bodies)
++                    self._note(account, name, cuerpos=done)
++
++    def _fetch_sizes(self, session: ImapSession, uids: Sequence[int]) -> dict[int, int]:
++        status, payload = session._require_imap().uid(  # noqa: SLF001
++            "FETCH", _uid_set(uids), "(UID RFC822.SIZE)"
++        )
++        if status != STATUS_OK:
++            raise ImapError(f"size fetch failed: {payload}")
++        sizes: dict[int, int] = {}
++        for item in payload:
++            text = item.decode("ascii", "replace") if isinstance(item, bytes) else ""
++            uid = re.search(r"UID (\d+)", text)
++            size = re.search(r"RFC822\.SIZE (\d+)", text)
++            if uid and size:
++                sizes[int(uid.group(1))] = int(size.group(1))
++        return sizes
++
++    @staticmethod
++    def _batches_by_size(
++        uids: Sequence[int], sizes: dict[int, int]
++    ) -> Iterable[list[int]]:
++        batch: list[int] = []
++        batch_bytes = 0
++        for uid in uids:
++            if uid not in sizes:
++                continue  # expunged since the list was read
++            if batch and (
++                batch_bytes + sizes[uid] > BODY_BYTES_PER_FETCH
++                or len(batch) >= BODIES_PER_FETCH
++            ):
++                yield batch
++                batch, batch_bytes = [], 0
++            batch.append(uid)
++            batch_bytes += sizes[uid]
++        if batch:
++            yield batch
++
++    def _fetch_bodies(
++        self, session: ImapSession, uids: Sequence[int]
++    ) -> dict[int, bytes]:
++        status, payload = session._require_imap().uid(  # noqa: SLF001
++            "FETCH", _uid_set(uids), "(UID BODY.PEEK[])"
++        )
++        if status != STATUS_OK:
++            raise ImapError(f"body fetch failed: {payload}")
++        bodies: dict[int, bytes] = {}
++        for item in payload:
++            if not isinstance(item, tuple):
++                continue
++            meta, raw = item
++            uid = re.search(rb"UID (\d+)", meta)
++            if uid and isinstance(raw, bytes):
++                bodies[int(uid.group(1))] = raw
++        missing = [uid for uid in uids if uid not in bodies]
++        for uid in missing:
++            # A server that put the UID after the literal: one at a time.
++            try:
++                bodies[uid] = session.fetch_message(str(uid))
++            except ImapError:
++                logger.warning("no body for uid %s", uid, exc_info=True)
++        return bodies
++
++    # --- progress, for anyone asking how far it got -------------------------
++
++    def _note(self, account: Account, folder: str, **counts: int) -> None:
++        self._state.setdefault(account.email, {}).setdefault(folder, {}).update(counts)
++        now = time.monotonic()
++        if now - getattr(self, "_saved_at", 0.0) > 10:
++            self._save_state()
++
++    def _save_state(self) -> None:
++        self._saved_at = time.monotonic()
++        try:
++            os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
++            tmp = STATE_PATH + ".tmp"
++            with open(tmp, "w") as f:
++                json.dump(
++                    {
++                        "fase": self._phase,
++                        "actualizado": datetime.now().isoformat(timespec="seconds"),
++                        "cuentas": self._state,
++                    },
++                    f,
++                    ensure_ascii=False,
++                    indent=1,
++                )
++            os.replace(tmp, STATE_PATH)
++        except OSError:
++            logger.warning("could not write %s", STATE_PATH, exc_info=True)
+diff --git a/src/postcard/core/store/database.py b/src/postcard/core/store/database.py
+index f80d535..f7a2b36 100644
+--- a/src/postcard/core/store/database.py
++++ b/src/postcard/core/store/database.py
+@@ -101,6 +101,22 @@ MIGRATIONS = [
+     """,
+     # NULL until the next sync reads it; see set_folder_uidvalidity.
+     "ALTER TABLE folders ADD COLUMN uidvalidity INTEGER",
++    # Bodies move out of the emails row. SQLite stores a row's columns in
++    # order and the BLOB sits mid-row, so with every body downloaded (the
++    # whole mailbox, gigabytes) reading the columns after it walked each
++    # body's overflow pages on every list. The index lets a folder be read
++    # newest-UID-first a page at a time instead of whole.
++    """
++    CREATE TABLE IF NOT EXISTS bodies (
++        email_id INTEGER PRIMARY KEY REFERENCES emails(id) ON DELETE CASCADE,
++        raw BLOB NOT NULL
++    );
++    INSERT OR IGNORE INTO bodies (email_id, raw)
++        SELECT id, raw_message FROM emails WHERE raw_message IS NOT NULL;
++    UPDATE emails SET raw_message = NULL WHERE raw_message IS NOT NULL;
++    CREATE INDEX IF NOT EXISTS idx_emails_uid_order
++        ON emails (folder_id, CAST(server_id AS INTEGER));
++    """,
+ ]
+ 
+ 
+@@ -111,6 +127,7 @@ class Database:
+             os.makedirs(data_dir, exist_ok=True)
+             path = os.path.join(data_dir, "postcard.db")
+ 
++        self.path = path
+         self._conn = sqlite3.connect(path)
+         self._conn.row_factory = sqlite3.Row
+         # Mirrors the "group-conversations" setting: off, every message is
+@@ -458,6 +475,11 @@ class Database:
+         This runs after every sync, where almost nothing has moved thread, so
+         rows that already hold the right id are left alone.
+         """
++        if not self.group_conversations:
++            # Ungrouped, nothing reads the ids, and on a whole mailbox the
++            # regrouping costs seconds of the main loop on every sync. Turning
++            # grouping on catches each folder up (window._on_grouping_changed).
++            return
+         emails = self.emails_in_folder(folder_id)
+         groups = threader.group(emails)
+         with self._conn:
+@@ -500,7 +522,11 @@ class Database:
+ 
+         places = ",".join("?" * len(folder_ids))
+         # Ungrouped, only the matching messages themselves are listed.
+-        thread_key = "COALESCE({0}conversation_id, {0}id)" if self.group_conversations else "{0}id"
++        thread_key = (
++            "COALESCE({0}conversation_id, {0}id)"
++            if self.group_conversations
++            else "{0}id"
++        )
+         rows = self._conn.execute(
+             f"""
+             SELECT {_EMAIL_COLUMNS} FROM emails
+@@ -515,20 +541,118 @@ class Database:
+         ).fetchall()
+         return self._conversations_from_rows(rows, is_multi_folder=len(folder_ids) > 1)
+ 
++    def list_conversations(
++        self,
++        folder_ids: Sequence[int],
++        query: str = "",
++        *,
++        limit: int,
++        unread_only: bool = False,
++        keep_id: int | None = None,
++    ) -> tuple[list[Conversation], bool]:
++        """The newest `limit` messages of the folders, as conversations.
++
++        With the whole mailbox stored (a hundred thousand messages in one
++        inbox) building every row on each refresh froze the window, so the
++        list is read a page at a time, newest UID first, and grows on scroll.
++        Returns the conversations and whether more are stored beyond them.
++        Local copies with no UID yet (a just-sent message) always come along:
++        they sort as the newest. keep_id is listed even when the unread
++        filter would drop it, so the open conversation doesn't vanish.
++        """
++        if not folder_ids:
++            return [], False
++
++        match = _fts_query(query) if query else ""
++        extra = (
++            " AND (e.unread = 1 OR e.id = ? OR e.conversation_id = ?)"
++            if unread_only
++            else ""
++        )
++        extra_args: tuple[object, ...] = (
++            (keep_id or -1, keep_id or -1) if unread_only else ()
++        )
++        columns = ", ".join(f"e.{c.strip()}" for c in _EMAIL_COLUMNS.split(","))
++        source = "emails e"
++        if match:
++            source = "emails e JOIN emails_fts ON emails_fts.rowid = e.id"
++            extra += " AND emails_fts MATCH ?"
++            extra_args += (match,)
++
++        rows: list[sqlite3.Row] = []
++        has_more = False
++        for folder_id in folder_ids:
++            rows += self._conn.execute(
++                f"""
++                SELECT {columns} FROM {source}
++                WHERE e.folder_id = ?
++                  AND (e.server_id IS NULL OR e.server_id = ''){extra}
++                """,
++                (folder_id, *extra_args),
++            ).fetchall()
++            page = self._conn.execute(
++                f"""
++                SELECT {columns} FROM {source}
++                WHERE e.folder_id = ? AND e.server_id != ''{extra}
++                ORDER BY CAST(e.server_id AS INTEGER) DESC
++                LIMIT ?
++                """,
++                (folder_id, *extra_args, limit + 1),
++            ).fetchall()
++            if len(page) > limit:
++                has_more = True
++                page = page[:limit]
++            rows += page
++
++        if self.group_conversations and rows:
++            # The rest of each listed thread, wherever it falls in the folder.
++            seen = {row["id"] for row in rows}
++            thread_ids = sorted(
++                {row["conversation_id"] for row in rows if row["conversation_id"]}
++            )
++            places = ",".join("?" * len(folder_ids))
++            for start in range(0, len(thread_ids), 500):
++                chunk = thread_ids[start : start + 500]
++                for row in self._conn.execute(
++                    f"""
++                    SELECT {columns} FROM emails e
++                    WHERE e.folder_id IN ({places})
++                      AND e.conversation_id IN ({",".join("?" * len(chunk))})
++                    """,
++                    (*folder_ids, *chunk),
++                ):
++                    if row["id"] not in seen:
++                        seen.add(row["id"])
++                        rows.append(row)
++
++        conversations = self._conversations_from_rows(
++            rows, is_multi_folder=len(folder_ids) > 1
++        )
++        if len(conversations) > limit:
++            has_more = True
++            conversations = conversations[:limit]
++        return conversations, has_more
++
+     def _conversations_from_rows(
+         self, rows: Sequence[sqlite3.Row], *, is_multi_folder: bool
+     ) -> list[Conversation]:
+         groups: dict[int, list[Email]] = {}
+         for row in rows:
+             email = self._email_from_row(row)
+-            key = (email.conversation_id or email.id) if self.group_conversations else email.id
++            key = (
++                (email.conversation_id or email.id)
++                if self.group_conversations
++                else email.id
++            )
+             groups.setdefault(key, []).append(email)
+ 
+         conversations = []
+         for key, mails in groups.items():
+             mails.sort(key=_arrival_key)  # oldest first, so .latest is right
+             conversations.append(
+-                Conversation(mails) if self.group_conversations else Conversation(mails, id=key)
++                Conversation(mails)
++                if self.group_conversations
++                else Conversation(mails, id=key)
+             )
+         thread_key = _sent_key if is_multi_folder else _arrival_key
+         conversations.sort(key=lambda c: thread_key(c.latest), reverse=True)
+@@ -604,24 +728,29 @@ class Database:
+ 
+     def get_raw_message(self, email_id: int) -> bytes | None:
+         row = self._conn.execute(
+-            "SELECT raw_message FROM emails WHERE id = ?", (email_id,)
++            "SELECT raw FROM bodies WHERE email_id = ?", (email_id,)
+         ).fetchone()
+ 
+-        return row["raw_message"] if row else None
++        return row["raw"] if row else None
+ 
+     def save_raw_message(self, email_id: int, raw: bytes) -> None:
+         # A row saved locally (a Sent copy, a draft) has no Message-ID of its own
+         # until now; save_incoming_email needs it to spot the server's copy.
+         message_id = BytesHeaderParser().parsebytes(raw)["Message-ID"] or ""
+-        self._conn.execute(
+-            """
+-            UPDATE emails
+-            SET raw_message = ?, message_id = COALESCE(NULLIF(message_id, ''), ?)
+-            WHERE id = ?
+-            """,
+-            (raw, str(message_id).strip(), email_id),
+-        )
+-        self._conn.commit()
++        with self._conn:
++            cursor = self._conn.execute(
++                """
++                UPDATE emails
++                SET message_id = COALESCE(NULLIF(message_id, ''), ?)
++                WHERE id = ?
++                """,
++                (str(message_id).strip(), email_id),
++            )
++            if cursor.rowcount:
++                self._conn.execute(
++                    "INSERT OR REPLACE INTO bodies (email_id, raw) VALUES (?, ?)",
++                    (email_id, raw),
++                )
+ 
+     def save_email(
+         self,
+diff --git a/src/postcard/window.py b/src/postcard/window.py
+index bffcba1..8cd7052 100644
+--- a/src/postcard/window.py
++++ b/src/postcard/window.py
+@@ -16,7 +16,7 @@ from urllib.parse import urlparse
+ 
+ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Graphene, Gtk
+ 
+-from . import mail_sync, message_view
++from . import backfill, mail_sync, message_view
+ from .account_dialog import PostcardAccountDialog
+ from .accounts_dialog import PostcardAccountsDialog
+ from .avatar_loader import AvatarLoader
+@@ -42,6 +42,7 @@ from .online_accounts_dialog import PostcardOnlineAccountsDialog
+ from .window_types import (
+     ALL_INBOXES_ID,
+     FOLDER_SYNC_COOLDOWN_SECONDS,
++    LIST_PAGE_SIZE,
+     MAIL_ACTIONS,
+     MOVE_UNDO_MS,
+     PAGE_EMPTY,
+@@ -295,6 +296,15 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         # and whether older messages remain on the server.
+         self._loaded_counts: dict[int, int] = {}
+         self._folders_with_more_mail: dict[int, bool] = {}
++        # How many of the stored messages the list shows, and whether more are
++        # stored past them. The whole mailbox is downloaded (backfill), so the
++        # list is read from the database a page at a time and grows on scroll.
++        self._list_limit = LIST_PAGE_SIZE
++        self._is_list_capped = False
++        self._backfill = backfill.Backfill(
++            self._db.path,
++            lambda folder_id: GLib.idle_add(self._on_backfill_progress, folder_id),
++        )
+         # When each folder was last synced, so revisiting one doesn't refetch.
+         self._folder_sync_times: dict[int, float] = {}
+         # Unread counts the server last reported for the folders we don't
+@@ -1574,6 +1584,8 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+             return
+         previous = self._current_folder
+         self._current_folder = folder
++        if folder is not previous:
++            self._list_limit = LIST_PAGE_SIZE
+         # All Inboxes belongs to no account, so Compose falls back to the first.
+         self._account = self._accounts.get(folder.account_id) or next(
+             iter(self._accounts.values()), None
+@@ -1718,6 +1730,10 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+     # action can refresh without reloading the reader.
+     def _on_grouping_changed(self, settings: Gio.Settings, key: str) -> None:
+         self._db.group_conversations = settings.get_boolean(key)
++        if self._db.group_conversations:
++            # Syncs skip threading while it's off, so catch every folder up.
++            for folder_id in list(self._folders_by_id):
++                self._db.reassign_conversations(folder_id)
+         self._refresh_conversations()
+ 
+     def _refresh_conversations(self, keep_id: int | None = None) -> None:
+@@ -1737,13 +1753,16 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         """The conversations on screen, narrowed by the search box and filter."""
+         folder_ids = [folder.id for folder in self._view_folders()]
+         query = self.search_entry.get_text().strip()
+-        matches = (
+-            self._db.search_conversations(folder_ids, query)
+-            if query
+-            else self._db.conversations_in_folders(folder_ids)
++        is_unread_only = self.unread_button.get_active()
++        matches, self._is_list_capped = self._db.list_conversations(
++            folder_ids,
++            query,
++            limit=self._list_limit,
++            unread_only=is_unread_only,
++            keep_id=keep_id,
+         )
+ 
+-        if not self.unread_button.get_active():
++        if not is_unread_only:
+             return matches
+         # Keep the conversation being read (keep_id) even once it's marked read,
+         # so opening a mail here doesn't make it vanish under you; it drops out
+@@ -1829,6 +1848,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+ 
+     def _on_search_timeout(self) -> bool:
+         self._search_timeout = 0
++        self._list_limit = LIST_PAGE_SIZE
+         self._refresh_conversations()
+         return False
+ 
+@@ -1856,7 +1876,14 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+     def _on_list_edge_reached(
+         self, _scroller: Gtk.ScrolledWindow, pos: Gtk.PositionType
+     ) -> None:
+-        if pos != Gtk.PositionType.BOTTOM or not self._is_online:
++        if pos != Gtk.PositionType.BOTTOM:
++            return
++        if self._is_list_capped:
++            self._list_limit += LIST_PAGE_SIZE
++            selected = self._selected_conversation()
++            self._refresh_conversations(keep_id=selected.id if selected else None)
++            return
++        if not self._is_online:
+             return
+         if self._is_view_syncing():
+             return
+@@ -2701,6 +2728,21 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         if account.id in self._resync_account_ids:
+             self._resync_account_ids.discard(account.id)
+             self._start_sync(account, in_background=True)
++        self._kick_backfill()
++        return False
++
++    def _kick_backfill(self) -> None:
++        if self._is_online:
++            self._backfill.kick(self._accounts.values())
++
++    # The download filled in older mail of a folder: if it's on screen and the
++    # list wasn't already full, show what arrived. Runs on the main loop.
++    def _on_backfill_progress(self, folder_id: int) -> bool:
++        if self._is_list_capped or self._current_folder is None:
++            return False
++        if folder_id in {folder.id for folder in self._view_folders()}:
++            selected = self._selected_conversation()
++            self._refresh_conversations(keep_id=selected.id if selected else None)
+         return False
+ 
+     def _store_mailboxes(
+diff --git a/src/postcard/window_types.py b/src/postcard/window_types.py
+index 9f5ba33..b9c6a53 100644
+--- a/src/postcard/window_types.py
++++ b/src/postcard/window_types.py
+@@ -24,6 +24,10 @@ MOVE_UNDO_MS = 5000
+ # Wait for typing to settle before running a search over FTS.
+ SEARCH_DEBOUNCE_MS = 200
+ 
++# How many messages the list reads from the database at a time; scrolling to
++# the bottom reads the next page. The whole mailbox is stored (backfill.py).
++LIST_PAGE_SIZE = 300
++
+ # How long a folder counts as freshly synced. Opening one costs a connection,
+ # a login and a header fetch, which clicking between two folders would
+ # otherwise pay for on every visit.
+-- 
+2.53.0
+

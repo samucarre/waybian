@@ -1,0 +1,344 @@
+From c2fedb8de9d8230048198cb262ee7cd57f2470e0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Mon, 2 Nov 2026 22:28:32 +0100
+Subject: [PATCH 13/16] fix: survive the keyring daemon being replaced while
+ Postcard runs
+
+libsecret keeps a proxy to the Secret Service it first talked to. After
+gnome-keyring-daemon is replaced (--replace, a crash, a restart) every
+lookup on that proxy fails with "The name :1.N was not provided by any
+.service files" for the rest of the process's life. The sync worker did
+not catch that: the thread died with its account still marked as
+syncing, so every later sync (the poll, the inbox watchers, Refresh)
+was dropped as "already running" and new mail never arrived again.
+
+- secrets: run each libsecret call through _keyring(), which drops the
+  cached proxy (Secret.Service.disconnect) and retries once on a D-Bus
+  error; credential_for returns None if the keyring is still unreachable.
+- window: the sync worker reports an exception from credential_for
+  (an OAuth refresh with the network gone raises too) through
+  errors.classify like a failed fetch; the flag, move, body and outbox
+  workers fall back to their "no credential" path instead of dying.
+- tests for the retry and the None fallback.
+---
+ src/postcard/core/secrets.py | 93 +++++++++++++++++++++++++++---------
+ src/postcard/window.py       | 31 ++++++++++--
+ tests/core/test_secrets.py   | 78 ++++++++++++++++++++++++++++++
+ 3 files changed, 175 insertions(+), 27 deletions(-)
+ create mode 100644 tests/core/test_secrets.py
+
+diff --git a/src/postcard/core/secrets.py b/src/postcard/core/secrets.py
+index b8c4242..ccea03b 100644
+--- a/src/postcard/core/secrets.py
++++ b/src/postcard/core/secrets.py
+@@ -1,16 +1,21 @@
+ """Where an account's sign-in comes from: the system keyring for an account
+ typed in by hand, GNOME Online Accounts for one imported from Settings."""
+ 
++import logging
++from collections.abc import Callable
++
+ import gi
+ 
+ gi.require_version("Secret", "1")
+ 
+-from gi.repository import Secret
++from gi.repository import GLib, Secret
+ 
+ from . import goa
+ from .models.account import Account
+-from .net.auth import Credential, MECHANISM_XOAUTH2
+ from .net import google_oauth
++from .net.auth import MECHANISM_XOAUTH2, Credential
++
++logger = logging.getLogger(__name__)
+ 
+ _SCHEMA = Secret.Schema.new(
+     "in.gxanshu.postcard.Account",
+@@ -28,40 +33,76 @@ _OAUTH_SCHEMA = Secret.Schema.new(
+ )
+ 
+ 
++def _keyring[T](call: Callable[[], T]) -> T:
++    """Run one libsecret call, reconnecting once if the keyring went away.
++
++    libsecret keeps a proxy to the Secret Service it first talked to. Once
++    that daemon is replaced (gnome-keyring-daemon --replace, a crash, a
++    restart of the user session's keyring), every call on the cached proxy
++    fails with a D-Bus error naming a bus name nobody owns any more, for as
++    long as the process lives. Dropping the proxy makes the next call look
++    the service up again.
++    """
++    try:
++        return call()
++    except GLib.Error as error:
++        if error.domain != "g-dbus-error-quark":
++            raise
++        logger.warning(
++            "the keyring stopped answering (%s); reconnecting to it", error.message
++        )
++        Secret.Service.disconnect()
++        return call()
++
++
+ def store_refresh_token(account_id: int, refresh_token: str) -> None:
+-    Secret.password_store_sync(
+-        _OAUTH_SCHEMA,
+-        {"account-id": str(account_id)},
+-        Secret.COLLECTION_DEFAULT,
+-        f"Postcard account {account_id} (OAuth)",
+-        refresh_token,
+-        None,
++    _keyring(
++        lambda: Secret.password_store_sync(
++            _OAUTH_SCHEMA,
++            {"account-id": str(account_id)},
++            Secret.COLLECTION_DEFAULT,
++            f"Postcard account {account_id} (OAuth)",
++            refresh_token,
++            None,
++        )
+     )
+ 
+ 
+ def lookup_refresh_token(account_id: int) -> str | None:
+-    return Secret.password_lookup_sync(
+-        _OAUTH_SCHEMA, {"account-id": str(account_id)}, None
++    return _keyring(
++        lambda: Secret.password_lookup_sync(
++            _OAUTH_SCHEMA, {"account-id": str(account_id)}, None
++        )
+     )
+ 
+ 
+ def store_password(account_id: int, password: str) -> None:
+-    Secret.password_store_sync(
+-        _SCHEMA,
+-        {"account-id": str(account_id)},
+-        Secret.COLLECTION_DEFAULT,
+-        f"Postcard account {account_id}",
+-        password,
+-        None,
++    _keyring(
++        lambda: Secret.password_store_sync(
++            _SCHEMA,
++            {"account-id": str(account_id)},
++            Secret.COLLECTION_DEFAULT,
++            f"Postcard account {account_id}",
++            password,
++            None,
++        )
+     )
+ 
+ 
+ def lookup_password(account_id: int) -> str | None:
+-    return Secret.password_lookup_sync(_SCHEMA, {"account-id": str(account_id)}, None)
++    return _keyring(
++        lambda: Secret.password_lookup_sync(
++            _SCHEMA, {"account-id": str(account_id)}, None
++        )
++    )
+ 
+ 
+ def clear_password(account_id: int) -> bool:
+-    return Secret.password_clear_sync(_SCHEMA, {"account-id": str(account_id)}, None)
++    return _keyring(
++        lambda: Secret.password_clear_sync(
++            _SCHEMA, {"account-id": str(account_id)}, None
++        )
++    )
+ 
+ 
+ def credential_for(account: Account) -> Credential | None:
+@@ -73,10 +114,18 @@ def credential_for(account: Account) -> Credential | None:
+     if account.goa_id:
+         return goa.credential(account.goa_id)
+ 
+-    refresh_token = lookup_refresh_token(account.id)
++    try:
++        refresh_token = lookup_refresh_token(account.id)
++        password = None if refresh_token is not None else lookup_password(account.id)
++    except GLib.Error:
++        # The keyring is unreachable even after a reconnect. None is what every
++        # worker already handles; an exception here used to kill the thread,
++        # leaving its account marked as busy for the rest of the session.
++        logger.exception("could not read the keyring for %s", account.email)
++        return None
++
+     if refresh_token is not None:
+         access_token = google_oauth.access_token(refresh_token)
+         return Credential(account.login_name, access_token, MECHANISM_XOAUTH2)
+ 
+-    password = lookup_password(account.id)
+     return Credential(account.login_name, password) if password else None
+diff --git a/src/postcard/window.py b/src/postcard/window.py
+index 540b8a5..bffcba1 100644
+--- a/src/postcard/window.py
++++ b/src/postcard/window.py
+@@ -34,6 +34,7 @@ from .core.models.conversation import Conversation
+ from .core.models.email import Email
+ from .core.models.folder import Folder
+ from .core.net import errors, imap_session
++from .core.net.auth import Credential
+ from .core.store.database import Database
+ from .folder_row import FolderRow
+ from .message_view import LoadCallback, MessageView
+@@ -897,7 +898,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         change: FlagChange,
+         revert: Callable[[], None],
+     ) -> None:
+-        credential = secrets.credential_for(account)
++        credential = self._credential_or_none(account)
+         if credential is None:
+             logger.warning("could not sign in to account %s", account.email)
+             GLib.idle_add(self._on_flag_sign_in_failed, revert)
+@@ -1292,7 +1293,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+     # Runs on the worker thread: network only, no Gtk/database access.
+     def _move_worker(self, pending: PendingMove) -> None:
+         account = pending.account
+-        credential = secrets.credential_for(account)
++        credential = self._credential_or_none(account)
+         if credential is None:
+             logger.warning("could not sign in to account %s", account.email)
+             GLib.idle_add(self._on_move_sign_in_failed, pending)
+@@ -2160,7 +2161,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         request: BodyRequest,
+         callback: LoadCallback,
+     ) -> None:
+-        credential = secrets.credential_for(account)
++        credential = self._credential_or_none(account)
+         if credential is None:
+             logger.warning("could not sign in to account %s", account.email)
+             GLib.idle_add(
+@@ -2399,7 +2400,7 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         account: Account,
+         jobs: list[tuple[int, str, list[str], bytes]],
+     ) -> None:
+-        credential = secrets.credential_for(account)
++        credential = self._credential_or_none(account)
+         if credential is None:
+             logger.warning(
+                 "could not sign in to %s; the Outbox stays queued", account.email
+@@ -2551,6 +2552,17 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         self._start_sync(account, in_background=True)
+         return False
+ 
++    # For the workers whose only answer to a missing credential is to give up:
++    # a token refresh that fails on the network is the same as none, and must
++    # not take the thread down with its bookkeeping undone.
++    @staticmethod
++    def _credential_or_none(account: Account) -> Credential | None:
++        try:
++            return secrets.credential_for(account)
++        except Exception:
++            logger.exception("could not get a credential for %s", account.email)
++            return None
++
+     # Runs on the worker thread: network only, no Gtk/database access.
+     def _sync_worker(
+         self,
+@@ -2559,7 +2571,16 @@ class PostcardMainWindow(Adw.ApplicationWindow):
+         offset: int,
+         should_count_unread: bool,
+     ) -> None:
+-        credential = secrets.credential_for(account)
++        try:
++            credential = secrets.credential_for(account)
++        except Exception as error:
++            # Refreshing an OAuth token is a network round trip: with the
++            # network gone it raises like a fetch would, and has to be reported
++            # the same way, or the account stays marked as syncing for good.
++            logger.exception("could not get a credential for %s", account.email)
++            is_auth_failure, message = errors.classify(error, account.imap_host)
++            GLib.idle_add(self._on_sync_error, account, is_auth_failure, message)
++            return
+         if credential is None:
+             logger.warning("could not sign in to account %s", account.email)
+             GLib.idle_add(
+diff --git a/tests/core/test_secrets.py b/tests/core/test_secrets.py
+new file mode 100644
+index 0000000..325f80e
+--- /dev/null
++++ b/tests/core/test_secrets.py
+@@ -0,0 +1,78 @@
++import pytest
++from gi.repository import GLib
++
++from postcard.core import secrets
++
++
++def _stale_name_error():
++    # What libsecret raises on every call once the keyring daemon it first
++    # talked to has been replaced: the cached proxy names a bus name nobody
++    # owns any more.
++    message = "The name :1.12 was not provided by any .service files"
++    return GLib.Error(message, "g-dbus-error-quark", 2)
++
++
++def test_a_keyring_call_is_retried_once_after_reconnecting(monkeypatch):
++    calls = []
++    disconnected = []
++
++    def lookup():
++        calls.append(1)
++        if len(calls) == 1:
++            raise _stale_name_error()
++        return "secret"
++
++    monkeypatch.setattr(
++        secrets.Secret.Service, "disconnect", lambda: disconnected.append(1)
++    )
++    assert secrets._keyring(lookup) == "secret"
++    assert len(calls) == 2
++    assert disconnected == [1]
++
++
++def test_a_keyring_still_down_after_reconnecting_raises(monkeypatch):
++    monkeypatch.setattr(secrets.Secret.Service, "disconnect", lambda: None)
++
++    def lookup():
++        raise _stale_name_error()
++
++    with pytest.raises(GLib.Error):
++        secrets._keyring(lookup)
++
++
++def test_an_error_that_is_not_dbus_is_not_retried(monkeypatch):
++    calls = []
++    monkeypatch.setattr(
++        secrets.Secret.Service,
++        "disconnect",
++        lambda: pytest.fail("should not reconnect"),
++    )
++
++    def lookup():
++        calls.append(1)
++        raise GLib.Error("locked", "secret-error-quark", 1)
++
++    with pytest.raises(GLib.Error):
++        secrets._keyring(lookup)
++    assert len(calls) == 1
++
++
++def test_credential_for_gives_none_when_the_keyring_is_unreachable(monkeypatch):
++    from postcard.core.models.account import Account
++
++    monkeypatch.setattr(secrets.Secret.Service, "disconnect", lambda: None)
++
++    def lookup(*_args):
++        raise _stale_name_error()
++
++    monkeypatch.setattr(secrets.Secret, "password_lookup_sync", lookup)
++    account = Account(
++        id=1,
++        email="a@b.c",
++        display_name="A",
++        imap_host="imap.b.c",
++        imap_port=993,
++        smtp_host="smtp.b.c",
++        smtp_port=465,
++    )
++    assert secrets.credential_for(account) is None
+-- 
+2.53.0
+

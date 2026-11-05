@@ -1,0 +1,202 @@
+From 4b9fafa4c9d2230b2c62a8698029615430847e4e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Sun, 1 Nov 2026 18:17:16 +0100
+Subject: [PATCH 11/16] fix: draw cid: images in the message body
+
+A multipart/related message points at its pictures with cid: URLs, which
+the reader's WebView cannot resolve and its CSP would refuse anyway. Rewrite
+each reference that names an image part into a data: URI, and keep those
+parts out of the attachment list. A message that is a single inline image
+(a newsletter) showed a blank body and an "attachment" chip.
+---
+ src/meson.build                          |  1 +
+ src/postcard/core/mime/inline_images.py  | 68 ++++++++++++++++++++++++
+ src/postcard/core/mime/message_parser.py | 13 ++++-
+ tests/core/mime/test_message_parser.py   | 43 +++++++++++++++
+ 4 files changed, 123 insertions(+), 2 deletions(-)
+ create mode 100644 src/postcard/core/mime/inline_images.py
+
+diff --git a/src/meson.build b/src/meson.build
+index 4b15bd2..9e97c68 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -100,6 +100,7 @@ python_installation.install_sources(postcard_core_net_sources, subdir: 'postcard
+ postcard_core_mime_sources = [
+   'postcard/core/mime/__init__.py',
+   'postcard/core/mime/html_colors.py',
++  'postcard/core/mime/inline_images.py',
+   'postcard/core/mime/message_parser.py',
+ ]
+ python_installation.install_sources(postcard_core_mime_sources, subdir: 'postcard/core/mime')
+diff --git a/src/postcard/core/mime/inline_images.py b/src/postcard/core/mime/inline_images.py
+new file mode 100644
+index 0000000..24f2ce2
+--- /dev/null
++++ b/src/postcard/core/mime/inline_images.py
+@@ -0,0 +1,68 @@
++"""Show the pictures a message carries inside itself.
++
++A multipart/related message ships its images as sibling parts and points at
++them from the HTML with `cid:` URLs (RFC 2392) -- some senders, banks and
++public bodies among them, send nothing but one such image. The reader's
++WebView cannot resolve `cid:`, and its CSP only lets `data:` images through, so
++every reference that names an image part is rewritten into a `data:` URI built
++from that part.
++"""
++
++import base64
++import re
++from email.message import EmailMessage
++from urllib.parse import unquote
++
++# A cid: URL inside an attribute or a CSS url(): src="cid:x", background=cid:x,
++# url('cid:x'). Plain text that happens to read "cid:" is left alone.
++_CID_REF = re.compile(r"""(?P<lead>["'(=]\s*)cid:(?P<cid>[^"'\s)>]+)""", re.IGNORECASE)
++
++
++def content_id(part: EmailMessage) -> str | None:
++    """The part's Content-ID without its angle brackets, or None."""
++    raw = part.get("Content-ID")
++    if raw is None:
++        return None
++    cid = str(raw).strip().removeprefix("<").removesuffix(">").strip()
++    return cid or None
++
++
++def inline_cid_images(html: str, parts: list[EmailMessage]) -> tuple[str, set[int]]:
++    """Rewrite the html's cid: references to the image parts they name.
++
++    Returns the new html and the ids (`id()`) of the parts it inlined, so the
++    caller can keep them out of the attachment list.
++    """
++    by_cid: dict[str, EmailMessage] = {}
++    for part in parts:
++        cid = content_id(part)
++        if cid and part.get_content_maintype() == "image":
++            by_cid.setdefault(cid, part)
++            by_cid.setdefault(cid.lower(), part)
++    if not by_cid:
++        return html, set()
++
++    used: set[int] = set()
++    uris: dict[int, str] = {}
++
++    def replace(match: re.Match[str]) -> str:
++        # The URL form is url-encoded (RFC 2392); senders are not always exact
++        # about case either, so an exact match wins and a folded one follows.
++        cid = unquote(match["cid"])
++        part = by_cid.get(cid) or by_cid.get(cid.lower())
++        if part is None:
++            return match[0]
++        key = id(part)
++        if key not in uris:
++            uris[key] = _data_uri(part)
++        used.add(key)
++        return match["lead"] + uris[key]
++
++    return _CID_REF.sub(replace, html), used
++
++
++def _data_uri(part: EmailMessage) -> str:
++    content = part.get_payload(decode=True)
++    data = content if isinstance(content, bytes) else b""
++    encoded = base64.b64encode(data).decode("ascii")
++    return f"data:{part.get_content_type()};base64,{encoded}"
+diff --git a/src/postcard/core/mime/message_parser.py b/src/postcard/core/mime/message_parser.py
+index c9357df..3f6c5e6 100644
+--- a/src/postcard/core/mime/message_parser.py
++++ b/src/postcard/core/mime/message_parser.py
+@@ -8,6 +8,7 @@ from email.policy import default as default_policy
+ 
+ from ..models.attachment import Attachment
+ from . import html_colors
++from .inline_images import inline_cid_images
+ 
+ # RFC 2369 wraps each unsubscribe target in angle brackets and separates them
+ # with commas, which may also appear inside a target -- so match the brackets.
+@@ -55,6 +56,7 @@ def parse_message(raw: bytes, *, is_12_hour_clock: bool = False) -> ParsedMessag
+     result.bcc = _addresses(msg, "Bcc")
+     result.date = _format_date(msg.get("Date"), is_12_hour_clock)
+ 
++    others: list[EmailMessage] = []
+     for part in msg.walk():
+         if part.is_multipart():
+             continue  # a container part -- its children are visited on their own
+@@ -63,14 +65,21 @@ def parse_message(raw: bytes, *, is_12_hour_clock: bool = False) -> ParsedMessag
+         disposition = part.get_content_disposition()
+ 
+         if disposition == "attachment":
+-            result.attachments.append(_as_attachment(part))
++            others.append(part)
+         elif content_type == "text/plain" and result.text_body is None:
+             result.text_body = part.get_content()
+         elif content_type == "text/html" and result.html_body is None:
+             result.html_body = part.get_content()
+         else:
+             # An inline image or unrecognised type is kept, not dropped.
+-            result.attachments.append(_as_attachment(part))
++            others.append(part)
++
++    # An image the body shows through cid: is drawn in place, so it is not
++    # listed a second time as a file; any other part still is.
++    inlined: set[int] = set()
++    if result.html_body:
++        result.html_body, inlined = inline_cid_images(result.html_body, others)
++    result.attachments = [_as_attachment(p) for p in others if id(p) not in inlined]
+ 
+     return result
+ 
+diff --git a/tests/core/mime/test_message_parser.py b/tests/core/mime/test_message_parser.py
+index a7708fb..d38ad88 100644
+--- a/tests/core/mime/test_message_parser.py
++++ b/tests/core/mime/test_message_parser.py
+@@ -224,3 +224,46 @@ def test_unsubscribe_ignores_a_scheme_we_would_never_open():
+ 
+ def test_a_message_from_no_mailing_list_has_no_unsubscribe():
+     assert parse_unsubscribe(PLAIN) is None
++
++
++def related(image_headers: bytes, html: bytes = b'<img src="cid:image0">') -> bytes:
++    return (
++        b"From: a@x\nMIME-Version: 1.0\n"
++        b'Content-Type: multipart/related; boundary="B"; type="text/html"\n\n'
++        b"--B\nContent-Type: text/html\n\n" + html + b"\n"
++        b"--B\nContent-Type: image/png\nContent-Transfer-Encoding: base64\n"
++        + image_headers
++        + b"\n\niVBORw==\n"
++        b"--B--\n"
++    )
++
++
++def test_a_cid_image_is_drawn_in_the_body_not_listed_as_a_file():
++    parsed = parse_message(related(b"Content-ID: <image0>"))
++    assert parsed.html_body is not None
++    assert 'src="data:image/png;base64,iVBORw=="' in parsed.html_body
++    assert "cid:" not in parsed.html_body
++    assert parsed.attachments == []
++
++
++def test_a_cid_url_is_url_decoded_and_matched_without_case():
++    parsed = parse_message(
++        related(
++            b"Content-ID: <Logo Part@x>", html=b"<td background='cid:logo%20part@X'>"
++        )
++    )
++    assert parsed.html_body is not None
++    assert "background='data:image/png;base64," in parsed.html_body
++    assert parsed.attachments == []
++
++
++def test_an_image_the_body_never_names_is_still_an_attachment():
++    parsed = parse_message(related(b"Content-ID: <other>"))
++    assert parsed.html_body == '<img src="cid:image0">'
++    assert [a.filename for a in parsed.attachments] == ["attachment"]
++
++
++def test_plain_text_that_reads_cid_is_left_alone():
++    parsed = parse_message(related(b"Content-ID: <image0>", html=b"<p>cid:image0</p>"))
++    assert parsed.html_body == "<p>cid:image0</p>"
++    assert len(parsed.attachments) == 1
+-- 
+2.53.0
+

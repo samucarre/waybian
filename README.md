@@ -18,7 +18,7 @@ This repository is the **presentation** of the project: what it is, how it works
 
 The day-to-day record (every change with its reason, a mirror of every configuration file, patches, and the scripts that rebuild the system from scratch) lives in a separate private repository, `waybian-lab`. Ask if you need something from it.
 
-> **Status (30 Oct 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.11`. Expect rough edges.
+> **Status (5 Nov 2026):** alpha, in daily use as the author's main machine since 22 Oct 2026. Upgraded in place from Debian 13 to Debian 14 on 27 Oct 2026 after a rehearsal in a container (what broke and how it was fixed: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.14`, the fourteenth own kernel since 26 Oct. Expect rough edges.
 
 ## Repositories
 
@@ -27,8 +27,8 @@ WayBian is spread over several repositories; this one ties them together.
 | Repository | What it is |
 |---|---|
 | **samucarre/waybian** (this one) | The presentation: what works and how, every change explained in [`docs/`](docs), screenshots, and the patches of every fork in [`patches/`](patches). |
-| The forks: [Waybar](https://github.com/samucarre/Waybar) · [aquamarine](https://github.com/samucarre/aquamarine) · [Postcard](https://github.com/samucarre/postcard) · [omdrop-awdl](https://github.com/samucarre/omdrop-awdl) · [libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) · [xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | The programs that needed a change, each in its own fork and branch. The [`forks/`](forks) folder links to each one at the exact commit running on the machine and explains it; what each one changes: [The pieces that were changed](#the-pieces-that-were-changed). |
-| [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) | The public fork of Aurora's kernel tree (also in [`forks/`](forks), not downloaded by default), used to send kernel patches upstream: eight pull requests to `omacom/linux-aurora`, open as of 30 Oct ([#258](https://github.com/omacom/linux-aurora/pull/258) GPU report to the power manager, [#259](https://github.com/omacom/linux-aurora/pull/259) J516C panel brightness, [#260](https://github.com/omacom/linux-aurora/pull/260) an AV1 decoding fix, [#261](https://github.com/omacom/linux-aurora/pull/261) more GPU jobs in flight, [#285](https://github.com/omacom/linux-aurora/pull/285) the M3 Max RTC alarm for suspend, [#284](https://github.com/omacom/linux-aurora/pull/284) a panel power-off board flag, [#287](https://github.com/omacom/linux-aurora/pull/287) GPU stamp renumbering, [#288](https://github.com/omacom/linux-aurora/pull/288) the GPU kept powered through suspend). |
+| The forks: [Waybar](https://github.com/samucarre/Waybar) · [SwayNotificationCenter](https://github.com/samucarre/SwayNotificationCenter) · [aquamarine](https://github.com/samucarre/aquamarine) · [Postcard](https://github.com/samucarre/postcard) · [omdrop-awdl](https://github.com/samucarre/omdrop-awdl) · [libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) · [xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4) | The programs that needed a change, each in its own fork and branch. The [`forks/`](forks) folder links to each one at the exact commit running on the machine and explains it; what each one changes: [The pieces that were changed](#the-pieces-that-were-changed). |
+| [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) | The public fork of Aurora's kernel tree (also in [`forks/`](forks), not downloaded by default), used to send kernel patches upstream: eight pull requests to `omacom/linux-aurora`; as of 5 Nov, #259 and #287 are merged and the other six are open ([#258](https://github.com/omacom/linux-aurora/pull/258) GPU report to the power manager, [#259](https://github.com/omacom/linux-aurora/pull/259) J516C panel brightness, [#260](https://github.com/omacom/linux-aurora/pull/260) an AV1 decoding fix, [#261](https://github.com/omacom/linux-aurora/pull/261) more GPU jobs in flight, [#285](https://github.com/omacom/linux-aurora/pull/285) the M3 Max RTC alarm for suspend, [#284](https://github.com/omacom/linux-aurora/pull/284) a panel power-off board flag, [#287](https://github.com/omacom/linux-aurora/pull/287) GPU stamp renumbering, [#288](https://github.com/omacom/linux-aurora/pull/288) the GPU kept powered through suspend). |
 | The lab repository (private) | The day-to-day log, a mirror of every configuration file, and the scripts that rebuild the system from scratch. |
 | The kernel fork (private) | Aurora's tree with local patches, configurations and install scripts ([docs/kernel-gpu.md](docs/kernel-gpu.md)). |
 
@@ -39,7 +39,7 @@ WayBian is spread over several repositories; this one ties them together.
 | Model | MacBook Pro 16" (2023), `Mac15,9` |
 | SoC | Apple M3 Max `t6031`: 16-core CPU (12P + 4E), 40-core GPU (G15C), 64 GB |
 | Apple board id | `j516c` (`t6031-j516c.dts` in the kernel) |
-| Storage | 1 TB SSD: macOS 27 on 521.5 GiB, Linux root 401.9 GiB (ext4), both on the same disk |
+| Storage | 1 TB SSD: macOS 27 on 363.2 GiB, Linux root 560.2 GiB (ext4), both on the same disk; the root was enlarged on 4 Nov 2026 with space taken from macOS |
 | Debian | 14 "forky" (testing), upgraded from 13 "trixie" on 27 Oct 2026 |
 | Page size | 16 KiB (required by Apple's IOMMUs; some binaries assume 4 KiB) |
 
@@ -50,10 +50,10 @@ WayBian is spread over several repositories; this one ties them together.
 | Dual boot with macOS | ✅ | Power on → Debian; hold the button → macOS. macOS untouched (its own APFS container, Full Security). |
 | CPU, NVMe, memory | ✅ | 16 KiB pages. |
 | **GPU** (G15C, 40 cores) | ✅ | Aurora Silicon's driver and Mesa. OpenGL 4.6 and Vulkan 1.4; the compositor uses ~2 % CPU. |
-| Internal display 3456×2234 | ✅ | Scale 2 in Hyprland. **Brightness control** works (local kernel patch for this board). |
+| Internal display 3456×2234, 120 Hz | ✅ | Scale 2 in Hyprland. **Brightness up to 1000 nits** (local kernel patch for this board; the driver capped it at 500): the bar's brightness panel has a normal range up to 500 and an "extra" one up to 1000. |
 | Keyboard and keyboard backlight | ✅ | The M3 keyboard has no backlight keys: a panel widget drives it. |
 | Trackpad | ✅ | Three-finger gestures switch workspaces. |
-| Wi‑Fi (BCM4388) | ✅ | Firmware extracted from macOS by the installer (`vendorfw`); see [docs/hardware.md](docs/hardware.md) for the initramfs fixes it needed. |
+| Wi‑Fi (BCM4388) | ✅ | Firmware extracted from macOS by the installer (`vendorfw`); see [docs/hardware.md](docs/hardware.md) for the initramfs fixes it needed. Since 2 Nov the regulatory database loads (it pointed at the Debian-signed copy, which this kernel does not accept), and since kernel 0.13 the country also reaches the firmware. |
 | Bluetooth | ✅ | Audio and HID devices. |
 | Speakers | ✅ | Asahi's DSP chain for the J516 (asahi-audio 5.0), `speakersafetyd` guarding them. |
 | Headphone jack | ✅ | Output capped at −12 dB (the DAC otherwise reaches +12 dB). |
@@ -64,7 +64,7 @@ WayBian is spread over several repositories; this one ties them together.
 | **HDMI output** | ✅ | External ultrawide at 3440×1440, 60 Hz, through a patched `aquamarine`. 100 Hz pending. |
 | Hardware video decode (AVD) | ✅ | H.264 / HEVC / VP9 / AV1 through VA‑API (`libva-v4l2-request`): Chrome, mpv, GStreamer. Roughly 5 W less on a video page. |
 | AirDrop | ✅ | Both directions with an iPhone, over the Wi‑Fi chip's AWDL (`omdrop`). |
-| Suspend | 🟡 | Suspend-to-idle works when started by hand (`rtcwake`), **GPU included**, and the RTC alarm wakes the machine (kernel 0.9; three out of three in testing). Not wired to the lid yet: closing it still locks the session, and the battery drain while asleep is not measured yet. See [docs/hardware.md](docs/hardware.md#suspend). |
+| Suspend | 🟡 | Suspend-to-idle works when started by hand (`rtcwake`), **GPU included**, and the RTC alarm wakes the machine (since kernel 0.9; three out of three in testing, again with 0.13). Not wired to the lid yet: closing it locks the session and turns the panel off, opening it turns the panel back on; the battery drain while asleep is not measured yet. See [docs/hardware.md](docs/hardware.md#suspend). |
 | Thunderbolt / USB4 | ❌ | No driver. |
 | DisplayPort over USB‑C | ❌ | Investigated; needs kernel and boot-loader work. |
 | Reading the macOS volume | ❌ | Hardware-encrypted APFS; files go through the network. |
@@ -82,11 +82,18 @@ Power button
                  └─ Linux (Aurora/Asahi kernel) + initramfs → Debian 14 → greetd → Hyprland
 ```
 
+GRUB has its own theme, with the three latest WayBian kernels, Asahi's kernel as the emergency entry and the first Aurora kernel as an old fallback:
+
+<p align="center">
+  <img src="images/grub.jpg" alt="GRUB with the WayBian theme" width="700"><br>
+  <sub>The boot menu (the real GRUB with its theme, captured in QEMU at the boot framebuffer's resolution, 3456×2160).</sub>
+</p>
+
 The Asahi installer is used in its **"UEFI environment only"** mode: it shrinks macOS, creates the stub container with macOS 14.8.3 firmware, installs m1n1 + U‑Boot and an ESP, and nothing else. Debian is written on top by hand. Debian's own `m1n1`, `u-boot-asahi` and `asahi-platform` packages are pinned out: they do not know the M3 and their post-install hook would overwrite `boot.bin` and leave the Mac unbootable. More in [docs/boot-chain.md](docs/boot-chain.md).
 
 ## Kernel and GPU
 
-- **Kernel "WayBian 0.11"**: Aurora Silicon's `integration/aurora` branch (Linux 7.2.11, state of 30 Oct 2026, with the M3 Pro suspend work of #274 and this project's J516C brightness and GPU stamp pull requests merged) plus local patches (panel brightness on this board, external HDMI on the `apple-drm-ext` card, GPU stamp renumbering so that long GPU compute runs no longer hang the GPU, suspend ported from an open Aurora pull request for the M3 Pro, and the GPU kept powered through suspend), 16 KiB pages, with BTF and without SELinux, built locally. GRUB keeps Asahi's 7.1.13 as an emergency entry and the previous kernels as fallbacks; new kernels are tried once through `grub-reboot` before becoming the default (0.3 was the exception: GRUB ignored `next_entry` until its image was rebuilt).
+- **Kernel "WayBian 0.14"**: Aurora Silicon's `integration/aurora` branch (Linux 7.2.11, state of 2 Nov 2026: with the M3 Pro suspend work of #274, this project's J516C brightness and GPU stamp pull requests (the stamp renumbering that keeps long GPU compute runs from hanging the GPU), the Wi‑Fi country passed to the firmware and the fix for a framebuffer leak of the panel path, #325) plus local patches (panel brightness on this board, up to 1000 nits, external HDMI on the `apple-drm-ext` card, suspend ported from an open Aurora pull request for the M3 Pro, and the GPU kept powered through suspend), 16 KiB pages, with BTF and without SELinux, built locally. Since 0.13 the boot loader carries that kernel's device tree (a new `boot.bin`, the previous one kept on the ESP to go back). GRUB keeps the three latest WayBian kernels and Asahi's 7.1.13 as an emergency entry; new kernels are tried once through `grub-reboot` before becoming the default (0.3 was the exception: GRUB ignored `next_entry` until its image was rebuilt).
 - **GPU**: the M3 is a new GPU generation (G15) that Asahi does not drive yet. Before adopting Aurora's driver, the author ported an experimental driver for another M3 variant to the G15C up to stable compute jobs (33 debugging rounds in a day); the lessons are in [docs/kernel-gpu.md](docs/kernel-gpu.md). Today: "Apple M3 Max (G15C B2)", 40 cores in 4 clusters, OpenGL 4.6 and Vulkan 1.4, Hyprland with real acceleration.
 - **Video decode**: the AVD firmware is free software (`aurora-silicon/avd-fw`), built locally and installed per kernel version.
 
@@ -94,13 +101,15 @@ The Asahi installer is used in its **"UEFI environment only"** mode: it shrinks 
 
 Hyprland 0.56 on Wayland, with a workflow that keeps the habits of macOS:
 
-- **Waybar ported to GTK4** (our fork of the upstream PR), with hand-written widgets: a one-click "workstation" layout, a recent-files panel with drag and drop, messaging counters (Discord, Telegram, WhatsApp, mail), remote desktops by groups, a Wi‑Fi panel that retries, a shortcuts cheat sheet, fans/temperatures/power, keyboard backlight, Tailscale, AirDrop and a small music player (Subsonic/Navidrome client playing through mpv; the bar button shows where the audio comes from, the player or a web page in Chrome).
-- **macOS shortcuts**: ⌘C/⌘V/⌘X everywhere (translated to Ctrl+Shift in the terminal, where Ctrl+C interrupts; ⌘C/⌘X confirm what was copied with a notification), ⌘F, ⌘W, ⌘T, ⌘⏎, ⌘+/⌘−, Ctrl+⌘F for full screen; ⌘⇧3/4/5 screenshots with the floating thumbnail; three-finger gestures.
+- **Waybar ported to GTK4** (our fork of the upstream PR), with hand-written widgets: a one-click "workstation" layout, a recent-files panel with drag and drop, messaging counters (Discord, Telegram, WhatsApp, mail), remote desktops by groups, a Wi‑Fi panel that retries, a shortcuts cheat sheet, a "System" strip (power, CPU, GPU, RAM, fans, SSD), brightness (normal up to 500 nits, "extra" up to 1000, and the night light), keyboard backlight, volume, "Utilities" (clock, translator, calculator, colour picker and a timer/stopwatch whose time shows in the bar), Tailscale, AirDrop and a small music player (Subsonic/Navidrome client playing through mpv; the bar button shows where the audio comes from, the player or a web page in Chrome).
+- **Panels that hang from the bar**: every panel, menu and tooltip, and the notification centre, comes out of the bar's edge like a drawer, with rounded "ears" where it meets the bar: black on the laptop, in the bar's own colours on the external monitor. Even the utility windows (clock, translator, calculator) open attached to it. The app launcher hangs from the notch, and ⌘C shows "Copied" as a tab of the notch. The tooltips and menus come from our Waybar fork, the notification centre's drawer from our swaync fork.
+- **Animated wallpaper**: the same picture, with its waves moving inside the circle: gulls by day, stars at dusk and the moon at night, following the local sunset. It only moves on an empty workspace (playing it costs about 4 W even when covered).
+- **macOS shortcuts**: ⌘C/⌘V/⌘X everywhere (translated to Ctrl+Shift in the terminal, where Ctrl+C interrupts; ⌘C/⌘X confirm what was copied), ⌘A, ⌘F, ⌘R, ⌘W, ⌘T, ⌘⏎, ⌘+/⌘−, Ctrl+⌘F for full screen; ⌘⇧3/4/5 screenshots with the floating thumbnail; three-finger gestures.
 - **Night light** as a Hyprland shader driven by the local sunset (the display driver exposes no colour matrix yet), removed from screenshots afterwards.
 - **AirDrop** to and from an iPhone, with a card you can drag from the moment the file arrives; photos are turned upright on arrival.
 - **Login**: greetd with a minimal Hyprland greeter (wallpaper + translucent terminal), drawn by CPU so it works even without the GPU, falling back to the console if the graphics do not come up in 40 s.
 - **Configuration in Lua**: Hyprland 0.56 warns that 0.57 drops the `.conf` format, so the configuration is Lua now; a small `hyprctl` wrapper translates over 60 old-style dispatchers and any configuration keyword, so the scripts, the bar and the idle daemon keep working.
-- **GTK4 everywhere**: Nautilus, file dialogs through a GTK4 portal built from our fork with **Quick Look** (space bar on a file, like the Finder) and thumbnails made ahead of time, Chrome with its GTK4 backend, fuzzel, satty, and **Postcard** as the mail client (built from our fork against Debian 14's GTK 4.24 and libadwaita 1.10, on the system Python 3.14).
+- **GTK4 everywhere**: Nautilus, file dialogs through a GTK4 portal built from our fork with **Quick Look** (space bar on a file, like the Finder; images, and PDFs or videos through the system thumbnailers) and thumbnails made ahead of time, Chrome with its GTK4 backend, fuzzel, satty, and **Postcard** as the mail client (built from our fork against Debian 14's GTK 4.24 and libadwaita 1.10, on the system Python 3.14; it now keeps the whole mailbox, not only the newest 50 messages of each folder).
 
 More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). The full software inventory (what is packaged, what we build ourselves, what draws with the GPU and why GTK4): [docs/software.md](docs/software.md).
 
@@ -110,12 +119,16 @@ More, with the reasons behind each choice: [docs/desktop.md](docs/desktop.md). T
 </p>
 <p align="center">
   <img src="images/waybar-panels.jpg" alt="Waybar and its panels" width="800"><br>
-  <sub>The bar and some of its panels.</sub>
+  <sub>The panels, each hanging from its button on the bar: the System strip, the music player, Utilities, brightness, keyboard light, volume and recent downloads (here with a demo folder).</sub>
+</p>
+<p align="center">
+  <img src="images/wallpaper-day-evening-night.jpg" alt="The animated wallpaper by day, at dusk and at night" width="800"><br>
+  <sub>The animated wallpaper by day, at dusk and at night.</sub>
 </p>
 <p align="center">
   <img src="images/airdrop.jpg" alt="AirDrop" width="400">
   <img src="images/login.jpg" alt="Login screen" width="400"><br>
-  <sub>AirDrop from an iPhone · the login screen.</sub>
+  <sub>The AirDrop panel · the login screen.</sub>
 </p>
 <p align="center">
   <img src="images/file-chooser-grid.jpg" alt="A GTK4 open dialog with square thumbnails" width="400">
@@ -134,8 +147,9 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | Hyprland 0.56 | compositor | OpenGL | Debian 14 |
 | aquamarine (patched) | DRM/GBM backend | — | **built from our fork** |
 | Waybar (GTK4 port) | bar and widgets | GTK4 (Vulkan) | **built from our fork** |
-| fuzzel · swaybg | launcher · wallpaper | Wayland native | Debian 14 |
-| SwayNotificationCenter (swaync) 0.12 | notification centre | GTK4 (Cairo for now) | Debian 14 |
+| own launcher panel · fuzzel | app launcher hanging from the notch · clipboard history | GTK4 · Wayland native | ours · Debian 14 |
+| mpvpaper (swaybg as fallback) | animated wallpaper | OpenGL (mpv) | **built from upstream source** · Debian 14 |
+| SwayNotificationCenter (swaync) 0.12.6 | notification centre | GTK4 (GPU) | **built from our fork** |
 | kitty 0.48 | terminal | OpenGL | Debian 14 |
 | greetd + tuigreet + own greeter | login | CPU on purpose | Debian 14 + ours |
 | hyprlock · hypridle · hyprpicker · hyprpolkitagent | lock, idle, picker, polkit | OpenGL / Wayland | Debian 14 |
@@ -143,9 +157,10 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | xdg-desktop-portal-hyprland · portal-gtk4 | portals, file dialogs with Quick Look | GTK4 (Rust) | Debian 14 · **built from our fork** |
 | Nautilus 51 · Loupe 51 · sushi 50 | files, images, Quick Look | GTK4 + libadwaita | Debian 14 |
 | pavucontrol 6 | audio mixer | GTK4 | Debian 14 |
+| Clocks · Dialect · Calculator | the Utilities tiles (clock, translator, calculator) | GTK4 + libadwaita | Debian 14 |
 | PipeWire · WirePlumber · asahi-audio · speakersafetyd | sound | — | Debian 14 + Asahi |
 | NetworkManager + iwd | network | — | Debian 14 |
-| ~30 own panels and tools | recent files, messaging, remote desktops, Wi‑Fi, keyboard light, AirDrop, music, night light… | Python + GTK4 | ours |
+| ~30 own panels and tools | recent files, messaging, remote desktops, Wi‑Fi, brightness, volume, keyboard light, utilities, system strip, AirDrop, music, night light… | Python + GTK4 | ours |
 
 **Applications**
 
@@ -162,7 +177,7 @@ The rule for choosing software: whatever is on screen should be drawn by the GPU
 | Remmina 1.4 | GTK3 | Debian 14 |
 | Steam · Tailscale · Claude Code | — | upstream |
 
-**Built by us, not from apt:** Waybar GTK4, aquamarine, libva-v4l2_request, Postcard, xdg-desktop-portal-gtk4, Aurora's Mesa, the AVD firmware and the kernel. Still not GTK4: the Electron apps (Electron ignores the flag), LibreOffice (its GTK4 backend crashes) and Remmina (no port).
+**Built by us, not from apt:** Waybar GTK4, SwayNotificationCenter, aquamarine, libva-v4l2_request, Postcard, xdg-desktop-portal-gtk4, mpvpaper, Aurora's Mesa, the AVD firmware and the kernel. Still not GTK4: the Electron apps (Electron ignores the flag), LibreOffice (its GTK4 backend crashes) and Remmina (no port).
 
 ## The pieces that were changed
 
@@ -170,12 +185,13 @@ Every program that needed a change has a fork with its own branch, so the system
 
 | Program | Fork / branch | What changed |
 |---|---|---|
-| Waybar | [samucarre/Waybar](https://github.com/samucarre/Waybar) `gtk4-debian13-m3` | GTK4 port (upstream PR Alexays/Waybar#5366) + fixes: a segfault in `hyprland/workspaces`, module menus, surviving monitor hot-plug, `align` for custom modules, workspace clicks with Hyprland's Lua configuration |
+| Waybar | [samucarre/Waybar](https://github.com/samucarre/Waybar) `gtk4-debian13-m3` | GTK4 port (upstream PR Alexays/Waybar#5366) + fixes: a segfault in `hyprland/workspaces`, module menus, surviving monitor hot-plug, `align` for custom modules, workspace clicks with Hyprland's Lua configuration; the bar's own tooltips and menus, hanging from its edge and opening as a drawer |
+| SwayNotificationCenter | [samucarre/SwayNotificationCenter](https://github.com/samucarre/SwayNotificationCenter) `debian13-m3` | the notification centre opens as the same drawer as the bar's panels |
 | aquamarine | [samucarre/aquamarine](https://github.com/samucarre/aquamarine) `hdmi-apple-drm-ext-0.15` | GBM renderer for a DRM card without a render node (the M3's HDMI path) |
-| omdrop-awdl | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | faster discoverable on/off from the bar |
-| Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GNOME Online Accounts), IMAP IDLE on Python < 3.14, an iCloud `SEARCH ALL` quirk, a "group conversations" switch, a WebKit sandbox fix for a non-Mesa GL driver, build recipe for Debian 13 (on Debian 14 the system GTK and Python are enough) |
+| omdrop-awdl | [samucarre/omdrop-awdl](https://github.com/samucarre/omdrop-awdl) `discoverable-rapido` | faster discoverable on/off from the bar; faster transfers when the home network is on a channel AWDL never visits |
+| Postcard | [samucarre/postcard](https://github.com/samucarre/postcard) `debian13-m3` | Google OAuth with a stored refresh token (no GNOME Online Accounts), IMAP IDLE on Python < 3.14, an iCloud `SEARCH ALL` quirk, a "group conversations" switch, a WebKit sandbox fix for a non-Mesa GL driver, `cid:` images and bodies that rendered blank, a replaced keyring daemon, a user stylesheet, the whole mailbox downloaded in the background, build recipe for Debian 13 (on Debian 14 the system GTK and Python are enough) |
 | libva-v4l2_request | [samucarre/libva-v4l2_request](https://github.com/samucarre/libva-v4l2_request) | mirror (VA‑API driver for the AVD) |
-| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | Quick Look in the GTK4 open dialogs (space bar, like the Finder) |
+| xdg-desktop-portal-gtk4 | [samucarre/xdg-desktop-portal-gtk4](https://github.com/samucarre/xdg-desktop-portal-gtk4/tree/waybian) `waybian` | Quick Look in the GTK4 open dialogs (space bar, like the Finder), also for PDFs and videos through the system thumbnailers |
 | Kernel | private fork of Aurora's tree | local patches, configs and install scripts; several of the patches are proposed upstream from the public fork [samucarre/linux-aurora](https://github.com/samucarre/linux-aurora) (pull requests #258–#261, #284, #285, #287, #288); see [docs/kernel-gpu.md](docs/kernel-gpu.md) |
 
 The forks are mounted as git submodules under [`forks/`](forks) (each pinned to the exact commit running on the machine), and every code commit of ours is also readable as a patch file under [`patches/`](patches). Full list, bases and recipes: [docs/forks.md](docs/forks.md).
@@ -195,8 +211,8 @@ Open an [issue](../../issues) or start a [discussion](../../discussions).
 
 ## Credits
 
-[Asahi Linux](https://asahilinux.org) (m1n1, U‑Boot, the installer, the kernel work, `asahi-audio`, `speakersafetyd`), [Aurora Silicon](https://github.com/aurora-silicon) (M3 kernel integration, GPU driver and Mesa), [Debian](https://www.debian.org), [Fedora Asahi Remix](https://fedora-asahi-remix.org) (kernel configuration), [Hyprland](https://hyprland.org), [Waybar](https://github.com/Alexays/Waybar), [omdrop](https://github.com/netmojo-systems/omdrop-awdl), [Postcard](https://github.com/gxanshu/postcard) and everyone whose reverse engineering makes Linux on Apple Silicon possible.
+[Asahi Linux](https://asahilinux.org) (m1n1, U‑Boot, the installer, the kernel work, `asahi-audio`, `speakersafetyd`), [Aurora Silicon](https://github.com/aurora-silicon) (M3 kernel integration, GPU driver and Mesa), [Debian](https://www.debian.org), [Fedora Asahi Remix](https://fedora-asahi-remix.org) (kernel configuration), [Hyprland](https://hyprland.org), [Waybar](https://github.com/Alexays/Waybar), [SwayNotificationCenter](https://github.com/ErikReider/SwayNotificationCenter), [mpvpaper](https://github.com/GhostNaN/mpvpaper), [omdrop](https://github.com/netmojo-systems/omdrop-awdl), [Postcard](https://github.com/gxanshu/postcard), Martin Martz (the wallpaper photo, on [Unsplash](https://unsplash.com/photos/VDKA7N_v_hI)) and everyone whose reverse engineering makes Linux on Apple Silicon possible.
 
 ## License
 
-The texts and images of this repository are under [CC BY-NC 4.0](LICENSE): you can share and adapt them for non-commercial purposes, crediting "Samuel Carreño, WayBian" with a link here; any commercial use needs the author's permission first. The patches in [`patches/`](patches) keep the license of the program they apply to, and the forks keep their upstream licenses.
+The texts and images of this repository are under [CC BY-NC 4.0](LICENSE): you can share and adapt them for non-commercial purposes, crediting "Samuel Carreño, WayBian" with a link here; any commercial use needs the author's permission first. The patches in [`patches/`](patches) keep the license of the program they apply to, and the forks keep their upstream licenses. The wallpaper in the screenshots is based on a photo by Martin Martz under the [Unsplash License](https://unsplash.com/license).

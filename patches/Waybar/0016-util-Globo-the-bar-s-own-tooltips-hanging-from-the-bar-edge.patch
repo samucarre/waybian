@@ -1,0 +1,437 @@
+From 30f3a31c963148702ac5fccd60c9599a1e969c66 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Tue, 3 Nov 2026 01:35:16 +0100
+Subject: [PATCH 16/21] util/Globo: the bar's own tooltips, hanging from the
+ bar edge; menus too
+
+GTK 4 places a tooltip window 4 px below the widget (gtk_tooltip_position pads the
+anchor rect by 4 px) and offers no way to move it, so a bar that wants tooltips fused
+to its bottom edge, in the style of its menus and panels, cannot use them.
+
+util::Globo replaces them: a Gtk::Popover without arrow, focus or input (can-target
+false), parented to the module widget, positioned BOTTOM with a y offset equal to the
+distance from the widget's bottom to the window's bottom, so it starts exactly at the
+bar's edge. It keeps GTK's timings (500 ms, 60 ms in browse mode), hides on leave and
+on click, and updates live while open (volume while scrolling). It has the CSS class
+"globo" plus the bar window's classes (output name, bar name, position) so style.css
+can style each bar differently; the same classes are added to the "menu-file" popover
+menus, which now get the same y offset.
+
+AModule creates it in bindEvents() for the bound widget and re-anchors it when the
+widget changes (ALabel binds the label first, AIconLabel rebinds the box; the label is
+0 px wide for icon-only modules). Modules keep setting tooltips as before: ALabel
+serves its stored markup through globoMarkup(), other modules through the widget's
+tooltip property, whose has-tooltip flag the globo keeps off so GTK never shows its own.
+Tray items (sni::Item) get one too.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013Fj1pHb2LH4pWLNaYRZXu4
+---
+ include/ALabel.hpp           |  11 ++--
+ include/AModule.hpp          |   5 ++
+ include/modules/sni/item.hpp |   3 +
+ include/util/globo.hpp       |  40 ++++++++++++
+ meson.build                  |   3 +-
+ src/ALabel.cpp               |  18 ++----
+ src/AModule.cpp              |  23 ++++++-
+ src/modules/sni/item.cpp     |   8 ++-
+ src/util/globo.cpp           | 115 +++++++++++++++++++++++++++++++++++
+ 9 files changed, 202 insertions(+), 24 deletions(-)
+ create mode 100644 include/util/globo.hpp
+ create mode 100644 src/util/globo.cpp
+
+diff --git a/include/ALabel.hpp b/include/ALabel.hpp
+index 324257a..d1ffb04 100644
+--- a/include/ALabel.hpp
++++ b/include/ALabel.hpp
+@@ -32,11 +32,9 @@ class ALabel : public AModule {
+   std::string default_format_;
+ 
+   bool setLabelMarkup(const Glib::ustring& markup);
+-  // Stores the markup and serves it through the module widget's query-tooltip
+-  // signal. It never calls set_tooltip_markup(): in GTK4 that re-picks the
+-  // widget under the pointer (without GTK_PICK_NON_TARGETABLE) and, for an
+-  // AIconLabel whose label is not targetable, the pick lands on the box, which
+-  // differs from the tooltip's widget, so GTK hid the tooltip on every refresh.
++  // Stores the markup for the bar's own tooltip (util::Globo, created in AModule::bindEvents),
++  // which reads it through globoMarkup(). It never calls set_tooltip_markup(): in GTK4 that
++  // re-picks the widget under the pointer and GTK hid the tooltip on every refresh.
+   bool setTooltipMarkup(const Glib::ustring& markup);
+ 
+   // resolveTooltipFormat() / resolveFormat() are inherited from AModule.
+@@ -97,8 +95,7 @@ class ALabel : public AModule {
+   // no collation weight, so two different icons compare equal.
+   std::optional<std::string> last_label_markup_;
+   std::optional<std::string> last_tooltip_markup_;
+-  bool tooltip_query_connected_ = false;
+-  bool onQueryTooltip(int x, int y, bool keyboard_mode, const Glib::RefPtr<Gtk::Tooltip>& tooltip);
++  Glib::ustring globoMarkup() const override;
+ };
+ 
+ }  // namespace waybar
+diff --git a/include/AModule.hpp b/include/AModule.hpp
+index 4e9b7c9..2102a65 100644
+--- a/include/AModule.hpp
++++ b/include/AModule.hpp
+@@ -12,6 +12,7 @@
+ 
+ #include "IModule.hpp"
+ #include "util/SafeSignal.hpp"
++#include "util/globo.hpp"
+ 
+ namespace waybar {
+ 
+@@ -64,6 +65,10 @@ class AModule : public IModule {
+   Glib::RefPtr<Gio::SimpleActionGroup> menuActions_;
+   void makeMenu();
+   bool disable_on_sleep_{false};
++  // The bar's own tooltip (util::Globo) for the module widget, created by bindEvents() unless "tooltip": false.
++  // Modules keep setting tooltips the usual way; globoMarkup() tells the globo what to show.
++  std::unique_ptr<util::Globo> globo_;
++  virtual Glib::ustring globoMarkup() const;
+ 
+   // --- Generic format/tooltip resolution (config-only, usable by any module,
+   // ALabel-derived or not). Prefers `<key>-<state>`, then `<key>`, then default.
+diff --git a/include/modules/sni/item.hpp b/include/modules/sni/item.hpp
+index 90a21d6..cb495f3 100644
+--- a/include/modules/sni/item.hpp
++++ b/include/modules/sni/item.hpp
+@@ -21,6 +21,7 @@
+ #include <string_view>
+ 
+ #include "bar.hpp"
++#include "util/globo.hpp"
+ 
+ namespace waybar::modules::SNI {
+ 
+@@ -131,6 +132,8 @@ class Item final : public sigc::trackable {
+   Glib::RefPtr<Gtk::GestureClick> gesture_click_;
+   Glib::RefPtr<Gtk::EventControllerScroll> scroll_controller_;
+   Glib::RefPtr<Gtk::EventControllerMotion> motion_controller_;
++  // the bar's own tooltip for the item (declared after widget_: destroyed first, while widget_ is alive)
++  std::unique_ptr<util::Globo> globo_;
+   std::set<std::string_view> update_pending_;
+ 
+   Host& host_;
+diff --git a/include/util/globo.hpp b/include/util/globo.hpp
+new file mode 100644
+index 0000000..f263364
+--- /dev/null
++++ b/include/util/globo.hpp
+@@ -0,0 +1,40 @@
++#pragma once
++
++#include <gtkmm.h>
++#include <sigc++/sigc++.h>
++
++#include <chrono>
++#include <functional>
++#include <memory>
++
++namespace waybar::util {
++
++// "Globo": the bar's own tooltip. GTK places its tooltip window 4 px below the widget and gives no control over
++// that, so the bar cannot hang it from its bottom edge. This replaces it with a Gtk::Popover (no arrow, no focus,
++// not targetable) offset so it starts exactly at the bar's bottom edge. It carries the CSS class "globo" plus the
++// bar window's classes (bar name, output, position), so style.css can give it the same finish as menus and panels.
++class Globo : public sigc::trackable {
++ public:
++  Globo(Gtk::Widget& anchor, std::function<Glib::ustring()> markup);
++  ~Globo();
++  void enter();    // pointer entered the widget: schedule the popup
++  void leave();    // pointer left: cancel and hide
++  void hide();     // hide now (click, destruction)
++  void refresh();  // the text changed: update the popup if it is visible
++  // Pixels between the bottom edge of `w` and the bottom edge of its window.
++  static int gap(Gtk::Widget& w);
++  Gtk::Widget& anchor() const { return anchor_; }
++
++ private:
++  void show();
++  Gtk::Widget& anchor_;
++  std::function<Glib::ustring()> markup_;
++  std::unique_ptr<Gtk::Popover> pop_;
++  Gtk::Label label_;
++  sigc::connection timer_;
++  sigc::connection destroy_conn_;
++  sigc::connection tooltip_conn_;
++  static std::chrono::steady_clock::time_point lastHide_;
++};
++
++}  // namespace waybar::util
+diff --git a/meson.build b/meson.build
+index a68bebd..ce59609 100644
+--- a/meson.build
++++ b/meson.build
+@@ -194,7 +194,8 @@ src_files += files(
+     'src/util/gtk/gtk_icon.cpp',
+     'src/util/command_line_stream.cpp',
+     'src/util/regex_collection.cpp',
+-    'src/util/rewrite_string.cpp'
++    'src/util/rewrite_string.cpp',
++    'src/util/globo.cpp'
+ )
+ 
+ # Modules
+diff --git a/src/ALabel.cpp b/src/ALabel.cpp
+index 3b43b28..2c2418e 100644
+--- a/src/ALabel.cpp
++++ b/src/ALabel.cpp
+@@ -113,23 +113,13 @@ bool ALabel::setTooltipMarkup(const Glib::ustring& markup) {
+   }
+ 
+   last_tooltip_markup_ = markup.raw();
+-  // w_ is the module's event target: the label for a plain ALabel, the box for an AIconLabel
+-  // (set in its constructor, so it is final by the time a module updates).
+-  if (!tooltip_query_connected_) {
+-    w_->signal_query_tooltip().connect(sigc::mem_fun(*this, &ALabel::onQueryTooltip), false);
+-    tooltip_query_connected_ = true;
+-  }
+-  // set_has_tooltip() only flips a flag: no re-query, so a visible tooltip stays up.
+-  w_->set_has_tooltip(!markup.empty());
++  // shown by the bar's own tooltip (util::Globo) through globoMarkup(); live update if it is open
++  if (globo_) globo_->refresh();
+   return true;
+ }
+ 
+-bool ALabel::onQueryTooltip(int, int, bool, const Glib::RefPtr<Gtk::Tooltip>& tooltip) {
+-  if (!last_tooltip_markup_ || last_tooltip_markup_->empty()) {
+-    return false;
+-  }
+-  tooltip->set_markup(*last_tooltip_markup_);
+-  return true;
++Glib::ustring ALabel::globoMarkup() const {
++  return last_tooltip_markup_ ? Glib::ustring(*last_tooltip_markup_) : Glib::ustring();
+ }
+ 
+ std::string ALabel::getIcon(uint16_t percentage, const std::string& alt, uint16_t max) {
+diff --git a/src/AModule.cpp b/src/AModule.cpp
+index 3af264b..79fd4f4 100644
+--- a/src/AModule.cpp
++++ b/src/AModule.cpp
+@@ -182,6 +182,12 @@ void AModule::makeMenu() {
+   menu_->set_parent(*w_);
+   menu_->set_has_arrow(false);
+   menu_->set_position(Gtk::PositionType::BOTTOM);
++  // the bar window's classes (bar name, output, position) so the CSS can tell bars apart, like the globo
++  if (auto* root = w_->get_root()) {
++    if (auto* win = dynamic_cast<Gtk::Widget*>(root)) {
++      for (const auto& c : win->get_css_classes()) menu_->add_css_class(c);
++    }
++  }
+   // the popover has to be unparented before the module widget goes away
+   w_->signal_destroy().connect([this]() {
+     if (menu_) {
+@@ -229,6 +235,7 @@ void AModule::setCursor(const Glib::RefPtr<Gdk::Cursor>& cur) {
+ 
+ void AModule::handleMouseEnter(double x, double y) {
+   this->operator Gtk::Widget&().set_state_flags(Gtk::StateFlags::PRELIGHT);
++  if (globo_) globo_->enter();
+ 
+   // Default behavior indicating event availability
+   if (hasPressEvents_ && !config_.isMember("cursor")) {
+@@ -238,6 +245,7 @@ void AModule::handleMouseEnter(double x, double y) {
+ 
+ void AModule::handleMouseLeave() {
+   this->operator Gtk::Widget&().unset_state_flags(Gtk::StateFlags::PRELIGHT);
++  if (globo_) globo_->leave();
+ 
+   // Default behavior indicating event availability
+   if (hasPressEvents_ && !config_.isMember("cursor")) {
+@@ -258,6 +266,7 @@ void AModule::handleRelease(int n_press, double x, double y) {
+ void AModule::handleClickEvent(uint n_button, int n_press, double x, double y,
+                                Gdk::Event::Type n_evtype) {
+   std::string format{};
++  if (globo_) globo_->hide();
+   spdlog::debug("click: module {} button {} n_press {} {} at {:.0f},{:.0f}", name_, n_button, n_press,
+                 n_evtype == Gdk::Event::Type::BUTTON_PRESS ? "press" : "release", x, y);
+   const std::map<std::tuple<uint, int, Gdk::Event::Type>, std::string>::const_iterator& rec{
+@@ -269,7 +278,11 @@ void AModule::handleClickEvent(uint n_button, int n_press, double x, double y,
+   }
+   if (rec != eventMap_.cend() && config_["menu"].isString() && rec->second == config_["menu"].asString()) {
+     if (!menu_) makeMenu();
+-    if (menu_) menu_->popup();
++    if (menu_) {
++      // hang the menu from the bar's bottom edge, not from the widget's
++      menu_->set_offset(0, util::Globo::gap(*w_));
++      menu_->popup();
++    }
+   }
+   // Second call user scripts
+   if (!format.empty()) {
+@@ -467,8 +480,16 @@ void AModule::bindEvents(Gtk::Widget& wg) {
+   if (gesture_click_) wg.add_controller(gesture_click_);
+   if (controller_scroll_) wg.add_controller(controller_scroll_);
+   if (controller_motion_) wg.add_controller(controller_motion_);
++
++  // The globo hangs from the widget the events are bound to. ALabel binds its label first and AIconLabel rebinds
++  // the box afterwards (the label is empty, 0 px wide, for icon-only modules), so re-anchor when the widget changes.
++  if (tooltipEnabled() && (!globo_ || &globo_->anchor() != &wg)) {
++    globo_ = std::make_unique<util::Globo>(wg, [this] { return globoMarkup(); });
++  }
+ }
+ 
++Glib::ustring AModule::globoMarkup() const { return w_ != nullptr ? w_->get_tooltip_markup() : Glib::ustring(); }
++
+ void AModule::unBindEvents() {
+   removeGestureClick();
+   removeControllerScroll();
+diff --git a/src/modules/sni/item.cpp b/src/modules/sni/item.cpp
+index 4b6650b..ad025c9 100644
+--- a/src/modules/sni/item.cpp
++++ b/src/modules/sni/item.cpp
+@@ -82,6 +82,7 @@ Item::Item(const std::string& bn, const std::string& op, const Json::Value& conf
+   motion_controller_->signal_enter().connect(sigc::mem_fun(*this, &Item::handleMouseEnter));
+   motion_controller_->signal_leave().connect(sigc::mem_fun(*this, &Item::handleMouseLeave));
+   widget_.add_controller(motion_controller_);
++  globo_ = std::make_unique<util::Globo>(widget_, [this] { return widget_.get_tooltip_markup(); });
+ 
+   cancellable_ = Gio::Cancellable::create();
+ 
+@@ -97,9 +98,13 @@ bool Item::isReady() const { return ready_; }
+ 
+ void Item::handleMouseEnter(double x, double y) {
+   widget_.set_state_flags(Gtk::StateFlags::PRELIGHT);
++  if (globo_) globo_->enter();
+ }
+ 
+-void Item::handleMouseLeave() { widget_.unset_state_flags(Gtk::StateFlags::PRELIGHT); }
++void Item::handleMouseLeave() {
++  widget_.unset_state_flags(Gtk::StateFlags::PRELIGHT);
++  if (globo_) globo_->leave();
++}
+ 
+ void Item::proxyReady(Glib::RefPtr<Gio::AsyncResult>& result) {
+   try {
+@@ -742,6 +747,7 @@ double Item::getScaledIconSize() {
+ }
+ 
+ void Item::handleClick(int n_press, double x, double y) {
++  if (globo_) globo_->hide();
+   if (!proxy_) {
+     return;
+   }
+diff --git a/src/util/globo.cpp b/src/util/globo.cpp
+new file mode 100644
+index 0000000..163e60e
+--- /dev/null
++++ b/src/util/globo.cpp
+@@ -0,0 +1,115 @@
++#include "util/globo.hpp"
++
++#include <gtk/gtk.h>
++
++#include <cmath>
++
++namespace waybar::util {
++
++std::chrono::steady_clock::time_point Globo::lastHide_{};
++
++Globo::Globo(Gtk::Widget& anchor, std::function<Glib::ustring()> markup)
++    : anchor_(anchor), markup_(std::move(markup)) {
++  // GTK must not show its own tooltip: the text stays in the widget's tooltip property (modules keep calling
++  // set_tooltip_markup()) and the globo renders it. set_tooltip_markup() flips has-tooltip back on, so undo it.
++  anchor_.set_has_tooltip(false);
++  tooltip_conn_ = anchor_.property_has_tooltip().signal_changed().connect([this] {
++    if (anchor_.get_has_tooltip()) anchor_.set_has_tooltip(false);
++  });
++  // the popover has to be unparented before the anchor goes away
++  destroy_conn_ = anchor_.signal_destroy().connect([this] {
++    timer_.disconnect();
++    if (pop_) {
++      pop_->unparent();
++      pop_.reset();
++    }
++  });
++}
++
++Globo::~Globo() {
++  timer_.disconnect();
++  destroy_conn_.disconnect();
++  tooltip_conn_.disconnect();
++  if (pop_) {
++    pop_->unparent();
++    pop_.reset();
++  }
++}
++
++int Globo::gap(Gtk::Widget& w) {
++  GtkRoot* root = gtk_widget_get_root(w.gobj());
++  if (root == nullptr) return 0;
++  graphene_rect_t b;
++  if (!gtk_widget_compute_bounds(w.gobj(), GTK_WIDGET(root), &b)) return 0;
++  const int h = gtk_widget_get_height(GTK_WIDGET(root)) - static_cast<int>(std::lround(b.origin.y + b.size.height));
++  return h > 0 ? h : 0;
++}
++
++void Globo::enter() {
++  timer_.disconnect();
++  // GTK's tooltip timings: 500 ms, or 60 ms in "browse mode" right after another tooltip closed
++  const bool browse = std::chrono::steady_clock::now() - lastHide_ < std::chrono::milliseconds(500);
++  timer_ = Glib::signal_timeout().connect(
++      [this] {
++        show();
++        return false;
++      },
++      browse ? 60 : 500);
++}
++
++void Globo::leave() {
++  timer_.disconnect();
++  hide();
++}
++
++void Globo::hide() {
++  timer_.disconnect();
++  if (pop_ && pop_->get_visible()) {
++    pop_->popdown();
++    lastHide_ = std::chrono::steady_clock::now();
++  }
++}
++
++void Globo::refresh() {
++  if (!pop_ || !pop_->get_visible()) return;
++  const auto text = markup_();
++  if (text.empty()) {
++    hide();
++  } else {
++    label_.set_markup(text);
++  }
++}
++
++void Globo::show() {
++  const auto text = markup_();
++  if (text.empty()) return;
++  if (!pop_) {
++    pop_ = std::make_unique<Gtk::Popover>();
++    pop_->set_parent(anchor_);
++    pop_->set_has_arrow(false);
++    pop_->set_autohide(false);
++    pop_->set_can_focus(false);
++    pop_->set_can_target(false);  // read-only: never takes the pointer away from the bar
++    pop_->set_position(Gtk::PositionType::BOTTOM);
++    pop_->add_css_class("globo");
++    // the bar window's classes (bar name, output, position) so the CSS can tell bars apart
++    if (auto* root = anchor_.get_root()) {
++      if (auto* win = dynamic_cast<Gtk::Widget*>(root)) {
++        for (const auto& c : win->get_css_classes()) pop_->add_css_class(c);
++      }
++    }
++    label_.set_use_markup(true);
++    label_.set_xalign(0.0F);
++    label_.set_justify(Gtk::Justification::LEFT);
++    // natural width = the unwrapped text (GTK tooltips do the same); only very long lines wrap
++    label_.set_wrap(true);
++    label_.set_natural_wrap_mode(Gtk::NaturalWrapMode::NONE);
++    label_.set_max_width_chars(90);
++    pop_->set_child(label_);
++  }
++  label_.set_markup(text);
++  pop_->set_offset(0, gap(anchor_));
++  pop_->popup();
++}
++
++}  // namespace waybar::util
+-- 
+2.53.0
+

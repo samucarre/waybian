@@ -1,0 +1,37 @@
+From 246259c71763e06b1a2a9ee978943c3e44aad061 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Samuel=20Carre=C3=B1o?= <soyminero11yt@gmail.com>
+Date: Thu, 29 Oct 2026 17:05:17 +0100
+Subject: [PATCH 15/21] ALabel: set an unchanged markup again when the label no
+ longer shows it
+
+AIconLabel strips an embedded icon (\0icon\1f<path>\n) out of the label after
+each update, so the label no longer matches the markup cached by
+setLabelMarkup(). The next update with the same text was skipped, found no
+icon in the label and hid the image: icon-only custom modules vanished as
+soon as their value stopped changing.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013Fj1pEW4qwuiGRk1kgfY8h
+---
+ src/ALabel.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/ALabel.cpp b/src/ALabel.cpp
+index e5aa065..3b43b28 100644
+--- a/src/ALabel.cpp
++++ b/src/ALabel.cpp
+@@ -95,7 +95,10 @@ ALabel::ALabel(const Json::Value& config, const std::string& name, const std::st
+ }
+ 
+ bool ALabel::setLabelMarkup(const Glib::ustring& markup) {
+-  if (last_label_markup_ == markup.raw()) {
++  // Skip only when the label still shows that markup: AIconLabel strips an embedded icon
++  // (\0icon\1f<path>\n) out of the label after each update, so an unchanged markup must be
++  // set again or the next update finds no icon and hides the image.
++  if (last_label_markup_ == markup.raw() && label_.get_label().raw() == markup.raw()) {
+     return false;
+   }
+ 
+-- 
+2.53.0
+
