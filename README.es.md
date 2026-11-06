@@ -71,6 +71,13 @@ WayBian está repartido en varios repositorios; este es el que los une.
 
 Detalle por componente, con los arreglos que hicieron falta: [docs/hardware.md](docs/hardware.md).
 
+## Probarlo o instalarlo
+
+En la [página de la release](https://github.com/samucarre/waybian/releases/latest) hay una imagen alfa del sistema entero: un disco de 40 GB (GPT: ESP + raíz ext4) sin cuentas ni datos de nadie, con un asistente que crea la tuya en el primer arranque.
+
+- **En una máquina virtual:** arráncala en QEMU con el script `waybian-qemu.sh` de la release (las notas explican cómo).
+- **En un MacBook Pro 16" M3 Max (J516C):** todavía no hay paquete para el instalador de Asahi, pero el contenido de la imagen se puede copiar al Mac a mano desde macOS: el instalador de Asahi en modo «UEFI environment only», luego la raíz a una partición nueva y `boot.bin` + GRUB a su ESP. Paso a paso en [docs/install.es.md](docs/install.es.md).
+
 ## Cómo arranca
 
 ```
