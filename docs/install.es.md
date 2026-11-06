@@ -12,7 +12,7 @@ Cómo poner la [imagen de la release](https://github.com/samucarre/waybian/relea
 
 - El MacBook Pro 16" M3 Max con macOS, y su contraseña de administrador.
 - Espacio libre para WayBian: 45 GB como mínimo. La raíz mide 40 GiB y en el primer arranque crece hasta ocupar la partición que le des, así que deja más si puedes.
-- Los ficheros de la release y `zstd` (`brew install zstd`). Únelos y descomprímelos como dicen las notas de la release; sale `waybian-0.14-qemu.img` (40 GB, disperso: ocupa unos 12 GB).
+- Los ficheros de la release y `zstd` (`brew install zstd`). Únelos y descomprímelos como dicen las notas de la release; sale `waybian-0.15-qemu.img` (40 GB, disperso: ocupa unos 12 GB).
 - Una hora, más o menos.
 
 ## 1. El instalador de Asahi, «UEFI environment only»
@@ -34,7 +34,7 @@ Crea un contenedor pequeño de arranque, una ESP de unos 500 MB con `m1n1/boot.b
 Conecta la imagen sin montarla:
 
 ```sh
-hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount waybian-0.14-qemu.img
+hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount waybian-0.15-qemu.img
 ```
 
 Saca un disco, por ejemplo `/dev/disk8`, con `disk8s1` («EFI - WAYBIAN», la ESP de la imagen) y `disk8s2` («WayBian», la raíz).
