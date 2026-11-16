@@ -18,7 +18,7 @@ Este repositorio es la **presentación** del proyecto: qué es, cómo funciona, 
 
 El registro del día a día (cada cambio con su porqué, el espejo de todos los ficheros de configuración, los parches y los scripts que reconstruyen el sistema desde cero) está en otro repositorio privado, `waybian-lab`. Pide lo que necesites de él.
 
-> **Estado (5-nov-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.2.11-waybian-0.14`, el decimocuarto kernel propio desde el 26-oct. Hay aristas.
+> **Estado (16-nov-2026):** alfa, en uso diario como máquina principal del autor desde el 22-oct-2026. Subido en el sitio de Debian 13 a Debian 14 el 27-oct-2026 tras un ensayo en contenedor (qué se rompió y cómo se arregló: [docs/software.md](docs/software.md#debian-14)). Kernel `7.3.4-waybian-0.17.1` en uso diario (la imagen pública sigue llevando el 0.15). Hay aristas.
 
 ## Repositorios
 
@@ -100,13 +100,14 @@ El instalador de Asahi se usa en su modo **«UEFI environment only»**: encoge m
 
 ## Kernel y GPU
 
+- **Actualización, 16-nov-2026**: el kernel de uso diario es ya el **WayBian 0.17.1**: la rama de integración de Aurora Silicon del 15-nov-2026 sobre **Linux 7.3.4**, con los parches propios arrastrados y uno más que arregla un pánico del Wi‑Fi (un SError en el manejador de interrupciones PCIe de Broadcom) al apagar AirDrop después de una suspensión. Si el kernel predeterminado no termina de arrancar, GRUB pasa solo al WayBian anterior, y a la entrada de emergencia si ese también falla. El HDMI externo está sin volver a probar en 7.3.4. El párrafo siguiente describe el 0.15, que es el que lleva la imagen pública.
 - **Kernel «WayBian 0.15»**: la rama `integration/aurora` de Aurora Silicon del 6-nov-2026 fusionada con **Linux 7.2.15** y con varios PRs de Aurora todavía abiertos (entre ellos: el reparto de la GPU cuando un programa de cómputo, como una IA local, la acapara, para que el escritorio siga teniendo su turno; dos arreglos del Wi‑Fi para la suspensión; y la huella del firmware de la GPU de este Mac, ya oficial, #340), más parches locales (brillo del panel en esta placa, hasta 1000 nits, HDMI externo por la tarjeta `apple-drm-ext`, ocho trabajos de GPU en vuelo por programa y la GPU encendida durante la suspensión), páginas de 16 KiB, con BTF y sin SELinux, compilado en local. Desde la 0.13 el cargador de arranque lleva el device tree de ese kernel (un `boot.bin` nuevo; el anterior se queda en la ESP para volver); la 0.15 sigue con el mismo. GRUB conserva los tres últimos kernels de WayBian y el 7.1.13 de Asahi como entrada de emergencia; un kernel nuevo se prueba una vez con `grub-reboot` antes de ser el predeterminado (la 0.3 fue la excepción: GRUB ignoraba `next_entry` hasta que se rehízo su imagen).
 - **GPU**: el M3 estrena generación de GPU (G15) y Asahi aún no la maneja. Antes de adoptar el driver de Aurora, el autor portó a la G15C un driver experimental de otra variante del M3 hasta tener cálculo estable (33 rondas de depuración en un día); las lecciones están en [docs/kernel-gpu.md](docs/kernel-gpu.md). Hoy: «Apple M3 Max (G15C B2)», 40 núcleos en 4 grupos, OpenGL 4.6 y Vulkan 1.4, Hyprland con aceleración de verdad.
 - **Vídeo**: el firmware del AVD es software libre (`aurora-silicon/avd-fw`), compilado en local e instalado por versión de kernel.
 
 ## Escritorio
 
-Hyprland 0.56 sobre Wayland, con una forma de trabajar que conserva las costumbres de macOS:
+Hyprland 0.57 sobre Wayland, con una forma de trabajar que conserva las costumbres de macOS:
 
 - **Waybar portada a GTK4** (nuestro fork de la PR de upstream), con botones hechos a mano: un «puesto de trabajo» en un clic, un panel de recientes con arrastrar y soltar, contadores de mensajería (Discord, Telegram, WhatsApp, correo), botones de LinkedIn, GitHub, Instagram, Facebook y TikTok (cada uno abre la web como ventana de aplicación del navegador, con tu propia cuenta; al esconderla se pausa lo que suena), escritorios remotos por grupos, un panel de Wi‑Fi que reintenta, una chuleta de atajos, una tira «Sistema» (consumo, CPU, GPU, RAM, ventiladores, SSD), el brillo (normal hasta 500 nits, «extra» hasta 1000, y la luz nocturna), luz del teclado, volumen, «Utilidades» (reloj, traductor, calculadora, cuentagotas y un temporizador/cronómetro cuyo tiempo se ve en la barra), Tailscale, AirDrop y un pequeño reproductor de música (cliente Subsonic/Navidrome que suena por mpv; el botón de la barra marca de dónde sale el audio, el reproductor o una web en Chrome).
 - **Paneles que cuelgan de la barra**: cada panel, menú y globo, y el centro de notificaciones, sale del filo de la barra como un cajón, con «orejas» redondeadas donde se junta con ella: en negro en el portátil y con los colores de su barra en el monitor externo. Hasta las ventanas de las utilidades (reloj, traductor, calculadora) se abren pegadas a ella. El lanzador de aplicaciones cuelga del notch, y ⌘C enseña «Copiado» como una pestaña del notch. Los globos y los menús vienen de nuestro fork de Waybar; el cajón del centro de notificaciones, de nuestro fork de swaync.
@@ -115,7 +116,7 @@ Hyprland 0.56 sobre Wayland, con una forma de trabajar que conserva las costumbr
 - **Luz nocturna** como shader de Hyprland según la puesta de sol local (el driver de pantalla aún no expone matriz de color), que se quita de las capturas después.
 - **AirDrop** desde y hacia un iPhone, con una tarjeta que se puede arrastrar desde que llega el fichero; las fotos se enderezan al llegar.
 - **Inicio de sesión**: greetd con un greeter de Hyprland mínimo (fondo + terminal translúcida), dibujado por CPU para que funcione aunque falle la GPU, con caída a la consola si lo gráfico no aparece en 40 s.
-- **Configuración en Lua**: Hyprland 0.56 avisa de que la 0.57 quita el formato `.conf`, así que la configuración ya es Lua; un pequeño envoltorio de `hyprctl` traduce más de 60 dispatchers del formato antiguo y cualquier keyword de configuración, y los scripts, la barra y el demonio de inactividad siguen funcionando.
+- **Configuración en Lua**: Hyprland 0.57 quitó el formato `.conf`, así que la configuración es Lua; un pequeño envoltorio de `hyprctl` traduce más de 60 dispatchers del formato antiguo y cualquier keyword de configuración, y los scripts, la barra y el demonio de inactividad siguen funcionando.
 - **GTK4 en todo**: Nautilus, diálogos de ficheros con un portal GTK4 compilado de nuestro fork con **vista rápida** (Espacio sobre un fichero, como en el Finder; imágenes, y PDF o vídeos por los generadores de miniaturas del sistema) y miniaturas hechas de antemano, Chrome con su backend GTK4, fuzzel, satty y **Postcard** como cliente de correo (compilado de nuestro fork contra el GTK 4.24 y la libadwaita 1.10 de Debian 14, con el Python 3.14 del sistema; ahora guarda el buzón entero, no solo los 50 correos más nuevos de cada carpeta).
 
 Más, con el porqué de cada decisión: [docs/desktop.md](docs/desktop.md). El inventario completo de software (qué viene empaquetado, qué compilamos nosotros, qué dibuja con la GPU y por qué GTK4): [docs/software.md](docs/software.md).
@@ -151,7 +152,7 @@ La regla para elegir programas: lo que está en pantalla lo tiene que dibujar la
 
 | Programa | Función | Dibuja con | Origen |
 |---|---|---|---|
-| Hyprland 0.56 | compositor | OpenGL | Debian 14 |
+| Hyprland 0.57 | compositor | OpenGL | Debian 14 |
 | aquamarine (parcheada) | backend DRM/GBM | — | **compilada de nuestro fork** |
 | Waybar (port a GTK4) | barra y botones | GTK4 (Vulkan) | **compilada de nuestro fork** |
 | lanzador propio · fuzzel | lanzador de aplicaciones colgado del notch · historial del portapapeles | GTK4 · Wayland nativo | nuestro · Debian 14 |
